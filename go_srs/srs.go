@@ -1,8 +1,9 @@
 package main
 
 import "fmt"
+import "github.com/winlinvip/go.rtmp/rtmp"
 
 func main() {
     fmt.Println("SRS(simple-rtmp-server) writen by google go language.")
-    fmt.Println("Maybe, maybe go is better language for server-side program, maybe go is the 21st century programming language, anyhow, try it.")
+    fmt.Println("RTMP Protocol Stack: ", rtmp.Version)
 }
