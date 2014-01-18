@@ -1,4 +1,4 @@
-go-srs
+go.srs
 ======
 
 [SRS(simple-rtmp-server)](https://github.com/winlinvip/simple-rtmp-server) writen by google go language.
