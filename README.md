@@ -17,3 +17,6 @@ go get github.com/winlinvip/go.srs/go_srs
 <pre>
 $GOPATH/bin/go_srs
 </pre>
+
+beijing, 2014
+winlin
