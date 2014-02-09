@@ -22,7 +22,9 @@
 package main
 
 import "fmt"
-import "github.com/winlinvip/go.rtmp/rtmp"
+import (
+	"github.com/winlinvip/go.rtmp/rtmp"
+)
 
 func main() {
     fmt.Println("SRS(simple-rtmp-server) written by google go language.")
