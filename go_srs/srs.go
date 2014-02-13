@@ -21,12 +21,65 @@
 
 package main
 
-import "fmt"
 import (
+	"fmt"
+	"net"
 	"github.com/winlinvip/go.rtmp/rtmp"
 )
 
 func main() {
     fmt.Println("SRS(simple-rtmp-server) written by google go language.")
     fmt.Println("RTMP Protocol Stack: ", rtmp.Version)
+
+	addr, err := net.ResolveTCPAddr("tcp4", ":1935")
+	if err != nil {
+		fmt.Println("error:", err)
+		return;
+	}
+
+	var listener *net.TCPListener
+	listener, err = net.ListenTCP("tcp4", addr)
+	if err != nil {
+		fmt.Println("error:", err)
+		return;
+	}
+
+	for {
+		fmt.Println("listener ready to accept client")
+		conn, err := listener.AcceptTCP()
+		if err != nil {
+			fmt.Println("error:", err)
+			return;
+		}
+
+		serve := func(conn *net.TCPConn) {
+			fmt.Println("get client:", conn.RemoteAddr())
+
+			c0c1 := make([]byte, 1537)
+			nsize,err := conn.Read(c0c1)
+			if err != nil {
+				fmt.Println("error:", err)
+				return
+			}
+			fmt.Println("read c0c1, size=", nsize)
+
+			s0s1s2 := make([]byte, 3073)
+			copy(s0s1s2[0:1537], c0c1)
+			nsize,err = conn.Write(s0s1s2)
+			if err != nil {
+				fmt.Println("error:", err)
+				return
+			}
+			fmt.Println("write s0s1s2, size=", nsize)
+
+			c2 := make([]byte, 1536)
+			nsize,err = conn.Read(c2)
+			if err != nil {
+				fmt.Println("error:", err)
+				return
+			}
+			fmt.Println("read c2, size=", nsize)
+		}
+		go serve(conn)
+	}
 }
