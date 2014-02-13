@@ -52,22 +52,20 @@ func main() {
 			return;
 		}
 
-		serve := func(conn *net.TCPConn) {
-			fmt.Println("get client:", conn.RemoteAddr())
-
+		simple_handshake := func(conn *net.TCPConn) (err error) {
 			c0c1 := make([]byte, 1537)
+			// TODO: FIXME: read in block mode.
 			nsize,err := conn.Read(c0c1)
 			if err != nil {
-				fmt.Println("error:", err)
 				return
 			}
 			fmt.Println("read c0c1, size=", nsize)
 
 			s0s1s2 := make([]byte, 3073)
 			copy(s0s1s2[0:1537], c0c1)
+			// TODO: FIXME: write in block mode.
 			nsize,err = conn.Write(s0s1s2)
 			if err != nil {
-				fmt.Println("error:", err)
 				return
 			}
 			fmt.Println("write s0s1s2, size=", nsize)
@@ -75,10 +73,20 @@ func main() {
 			c2 := make([]byte, 1536)
 			nsize,err = conn.Read(c2)
 			if err != nil {
-				fmt.Println("error:", err)
 				return
 			}
 			fmt.Println("read c2, size=", nsize)
+
+			return
+		}
+
+		serve := func(conn *net.TCPConn) {
+			fmt.Println("get client:", conn.RemoteAddr())
+			err := simple_handshake(conn)
+			if err != nil {
+				fmt.Println("error:", err)
+				return
+			}
 		}
 		go serve(conn)
 	}
