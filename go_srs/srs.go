@@ -27,6 +27,14 @@ import (
 	"github.com/winlinvip/go.rtmp/rtmp"
 )
 
+type SrsError struct {
+	code int
+	desc string
+}
+func (err SrsError) Error() string {
+	return fmt.Sprintf("code=%v: %s", err.code, err.desc)
+}
+
 func main() {
     fmt.Println("SRS(simple-rtmp-server) written by google go language.")
     fmt.Println("RTMP Protocol Stack: ", rtmp.Version)
@@ -104,19 +112,19 @@ func main() {
 				cid = 64
 				cid += int(buf[0])
 				bh_size = 2
-				return
+			} else if cid == 1 {
+				buf = make([]byte, 2)
+				_, err = conn.Read(buf)
+				if err != nil {
+					return
+				}
+				cid = 64
+				cid += int(buf[0])
+				cid += int(buf[1]) * 256
+				bh_size = 3
+			} else {
+				err = SrsError{}
 			}
-
-			// cid is 1
-			buf = make([]byte, 2)
-			_, err = conn.Read(buf)
-			if err != nil {
-				return
-			}
-			cid = 64
-			cid += int(buf[0])
-			cid += int(buf[1]) * 256
-			bh_size = 3
 
 			return
 		}
