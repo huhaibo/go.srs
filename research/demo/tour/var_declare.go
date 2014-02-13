@@ -28,4 +28,9 @@ func main() {
 
 	a, c = auto_local_var()
 	fmt.Printf("auto_local_var()(int, bool)\n\tret=%v,%v\n", a, c)
+
+	vi := 10
+	fmt.Println("vi=", vi, ", init.")
+	vi = 20
+	fmt.Println("vi=", vi, ", finish.")
 }

@@ -26,6 +26,11 @@ func my_swap2(a, b int) (x, y int) {
 	return;
 }
 
+func my_print(user int, params ...string) {
+	fmt.Println("user:", user)
+	fmt.Println("params:", params)
+}
+
 func main(){
 	pa := 10
 	fmt.Printf("my_func(pa int) int\n\tpa=%d, ret=%d\n", pa, my_func(pa))
@@ -42,4 +47,9 @@ func main(){
 
 	pa, pb = my_swap2(a, b)
 	fmt.Printf("my_swap2(a, b) (x, y, int)\n\ta=%v, b=%v, ret=%v,%v\n", a, b, pa, pb)
+
+	fmt.Println("variant param keyword: ...")
+	my_print(10, "a", "b", "c")
+	my_print(11, []string{"a", "b", "c"}...)
+	my_print(12, make([]string, 3)...)
 }
