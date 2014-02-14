@@ -27,14 +27,6 @@ import (
 	"github.com/winlinvip/go.rtmp/rtmp"
 )
 
-type SrsError struct {
-	code int
-	desc string
-}
-func (err SrsError) Error() string {
-	return fmt.Sprintf("code=%v: %s", err.code, err.desc)
-}
-
 func main() {
     fmt.Println("SRS(simple-rtmp-server) written by google go language.")
     fmt.Println("RTMP Protocol Stack: ", rtmp.Version)
@@ -62,16 +54,23 @@ func main() {
 		}
 
 		do_serve :=func(conn *net.TCPConn) (err error) {
-			err = rtmp.SimpleHandshake(conn)
+			r := &rtmp.RtmpProtocol{}
+
+			err = r.Initialize(conn)
 			if err != nil {
 				return
 			}
 
-			format, cid, bhsize, err := rtmp.ReadBasicHeader(conn)
+			err = r.SimpleHandshake()
 			if err != nil {
 				return
 			}
-			fmt.Printf("fmt=%v, cid=%v, bhsize=%v\n", format, cid, bhsize)
+
+			msg, err := r.RecvMessage()
+			if err != nil {
+				return
+			}
+			fmt.Println("get rtmp msg:", msg)
 
 			return
 		}
