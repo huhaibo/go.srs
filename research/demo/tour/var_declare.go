@@ -19,6 +19,10 @@ func auto_local_var() (int, bool) {
 	return a, b
 }
 
+type Winlin struct {
+	name string
+}
+
 func main() {
 	a, b, c, d, e := ret_local_var()
 	fmt.Printf("ret_local_var() (int, int, bool, bool, bool)\n\tret=%v,%v,%v,%v,%v\n", a, b, c, d, e)
@@ -33,4 +37,18 @@ func main() {
 	fmt.Println("vi=", vi, ", init.")
 	vi = 20
 	fmt.Println("vi=", vi, ", finish.")
+
+	wl := new(Winlin)
+	wl.name = "winlin object"
+	fmt.Println(wl)
+
+	wl0 := &(*wl)
+	wl0.name = "changed winlin object"
+	fmt.Println(wl)
+	fmt.Println(wl0)
+
+	wl1 := *wl
+	wl1.name = "changed by value"
+	fmt.Println(wl)
+	fmt.Println(wl1)
 }

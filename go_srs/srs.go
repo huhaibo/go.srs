@@ -54,20 +54,17 @@ func main() {
 		}
 
 		do_serve :=func(conn *net.TCPConn) (err error) {
-			r := &rtmp.RtmpProtocol{}
-
-			err = r.Initialize(conn)
-			if err != nil {
+			var r *rtmp.RtmpProtocol
+			if r, err = rtmp.NewRtmpProtocol(conn); err != nil {
 				return
 			}
 
-			err = r.SimpleHandshake()
-			if err != nil {
+			if err = r.SimpleHandshake(); err != nil {
 				return
 			}
 
-			msg, err := r.RecvMessage()
-			if err != nil {
+			var msg *rtmp.RtmpMessage
+			if msg, err = r.RecvMessage(); err != nil {
 				return
 			}
 			fmt.Println("get rtmp msg:", msg)
