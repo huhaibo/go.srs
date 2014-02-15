@@ -67,7 +67,7 @@ func main() {
 			if msg, err = r.RecvMessage(); err != nil {
 				return
 			}
-			fmt.Println("get rtmp msg:", msg)
+			fmt.Printf("get rtmp msg: type=%v, size=%v\n", msg.Header.MessageType, msg.Header.PayloadLength)
 
 			return
 		}
