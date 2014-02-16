@@ -60,40 +60,68 @@ func main() {
 	}
 }
 
-func my_rtmp_expect(src interface {}, expect interface {}) (ok bool){
+func my_rtmp_expect(pkt interface {}, v interface {}) (ok bool){
+	/*
+    func my_rtmp_expect(pkt interface {}, v interface {}){
+        rt := reflect.TypeOf(v)
+        rv := reflect.ValueOf(v)
+        
+        // check the convertible and convert to the value or ptr value.
+        // for example, the v like the c++ code: Msg**v
+        pkt_rt := reflect.TypeOf(pkt)
+        if pkt_rt.ConvertibleTo(rt){
+            // directly match, the pkt is like c++: Msg**pkt
+            // set the v by: *v = *pkt
+            rv.Elem().Set(reflect.ValueOf(pkt).Elem())
+            return
+        }
+
+        if pkt_rt.ConvertibleTo(rt.Elem()) {
+            // ptr match, the pkt is like c++: Msg*pkt
+            // set the v by: *v = pkt
+            rv.Elem().Set(reflect.ValueOf(pkt))
+            return
+        }
+    }
+	 */
 	ok = false
 
-	src_rt := reflect.TypeOf(src)
-	src_rv := reflect.ValueOf(src)
-	src_ptr_rt := reflect.PtrTo(src_rt)
-	expect_rt := reflect.TypeOf(expect)
-	expect_rv := reflect.ValueOf(expect)
+	pkt_rt := reflect.TypeOf(pkt)
+	pkt_rv := reflect.ValueOf(pkt)
+	pkt_ptr_rt := reflect.PtrTo(pkt_rt)
+	rt := reflect.TypeOf(v)
+	rv := reflect.ValueOf(v)
 
-	if expect_rv.Kind() != reflect.Ptr || expect_rv.IsNil() {
+	if rv.Kind() != reflect.Ptr || rv.IsNil() {
 		fmt.Println("expect must be ptr and not nil")
 		return
 	}
 
-	fmt.Println("type info, src:", src_rt, "ptr(src):", src_ptr_rt, ", expect:", expect_rt)
-	fmt.Println("value info, src:", src_rv, ", src.Elem():", src_rv.Elem(), ", expect:", expect_rv, ", expect.Elem():", expect_rv.Elem())
-	fmt.Println("convertible src=>expect:", src_rt.ConvertibleTo(expect_rt))
-	fmt.Println("ptr convertible ptr(src)=>expect:", src_ptr_rt.ConvertibleTo(expect_rt))
-	fmt.Println("elem convertible src=>expect.Elem()", src_rt.ConvertibleTo(expect_rt.Elem()))
-	fmt.Println("settable src:", src_rv.CanSet(), ", expect:", expect_rv.CanSet())
-	fmt.Println("elem settable src:", src_rv.Elem().CanSet(), ", expect:", expect_rv.Elem().CanSet())
+	fmt.Println("type info, src:", pkt_rt, "ptr(src):", pkt_ptr_rt, ", expect:", rt)
+	fmt.Println("value info, src:", pkt_rv, ", src.Elem():", pkt_rv.Elem(), ", expect:", rv, ", expect.Elem():", rv.Elem())
+	fmt.Println("convertible src=>expect:", pkt_rt.ConvertibleTo(rt))
+	fmt.Println("ptr convertible ptr(src)=>expect:", pkt_ptr_rt.ConvertibleTo(rt))
+	fmt.Println("elem convertible src=>expect.Elem()", pkt_rt.ConvertibleTo(rt.Elem()))
+	fmt.Println("settable src:", pkt_rv.CanSet(), ", expect:", rv.CanSet())
+	fmt.Println("elem settable src:", pkt_rv.Elem().CanSet(), ", expect:", rv.Elem().CanSet())
 
-	if expect_rv.Elem().CanSet() {
-		if src_rt.ConvertibleTo(expect_rt){
+	// check the convertible and convert to the value or ptr value.
+	// for example, the v like the c++ code: Msg**v
+	if rv.Elem().CanSet() {
+		if pkt_rt.ConvertibleTo(rt){
+			// directly match, the pkt is like c++: Msg**pkt
+			// set the v by: *v = *pkt
 			fmt.Println("directly match, src=>expect")
-			expect_rv.Elem().Set(src_rv.Elem())
+			rv.Elem().Set(pkt_rv.Elem())
 			ok = true
 			return
 		}
 
-		expect_elem_rt := expect_rt.Elem()
-		if src_rt.ConvertibleTo(expect_elem_rt) {
+		if pkt_rt.ConvertibleTo(rt.Elem()) {
+			// ptr match, the pkt is like c++: Msg*pkt
+			// set the v by: *v = pkt
 			fmt.Println("pointer match, src=>*expect")
-			expect_rv.Elem().Set(src_rv)
+			rv.Elem().Set(pkt_rv)
 			ok = true
 			return
 		}
