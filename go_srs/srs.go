@@ -54,7 +54,7 @@ func main() {
 		}
 
 		do_serve :=func(conn *net.TCPConn) (err error) {
-			var r *rtmp.RtmpServer
+			var r rtmp.RtmpServer
 			if r, err = rtmp.NewRtmpServer(conn); err != nil {
 				return
 			}
