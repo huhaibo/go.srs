@@ -61,7 +61,12 @@ func expect1(from Winlin, to *Winlin) {
 func expect2(from Winlin, to *Winlin) {
 	*to = from
 }
+func my_pi(v interface {}) {
+	fmt.Println("winlin pi=", v.(string))
+}
 func main() {
+	my_pi("str")
+
 	bw := BlackWinlin{id:10}
 	show(&bw)
 	show1(&bw)

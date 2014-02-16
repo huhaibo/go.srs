@@ -22,6 +22,9 @@ func (w *Winlin) String() (string) {
 }
 
 func main() {
+	var pi interface {}
+	fmt.Println("pi is nil:", pi==nil)
+
 	var a interface {} = 10
 	fmt.Println(a)
 	fmt.Println(reflect.TypeOf(a))
