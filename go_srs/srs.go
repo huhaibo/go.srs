@@ -27,6 +27,47 @@ import (
 	"github.com/winlinvip/go.rtmp/rtmp"
 )
 
+/**
+* the client provides the main logic control for RTMP clients.
+*/
+type SrsClient struct {
+	conn *net.TCPConn
+	rtmp rtmp.RtmpServer
+	req *rtmp.RtmpRequest
+}
+func NewSrsClient(conn *net.TCPConn) (r *SrsClient, err error) {
+	r = &SrsClient{}
+	r.conn = conn
+
+	if r.rtmp, err = rtmp.NewRtmpServer(conn); err != nil {
+		return
+	}
+	r.req = rtmp.NewRtmpRequest()
+	return
+}
+
+func (r *SrsClient) do_cycle() (err error) {
+	if err = r.rtmp.Handshake(); err != nil {
+		return
+	}
+
+	if err = r.rtmp.ConnectApp(r.req); err != nil {
+		return
+	}
+	fmt.Printf("request, tcUrl=%v(vhost=%v, app=%v), AMF%v, pageUrl=%v, swfUrl=%v\n",
+		r.req.TcUrl, r.req.Vhost, r.req.App, r.req.ObjectEncoding, r.req.PageUrl, r.req.SwfUrl)
+
+	// check_vhost
+	// TODO: FIXME: implements it
+
+	err = r.service_cycle()
+	// on_close
+	return
+}
+func (r *SrsClient) service_cycle() (err error) {
+	return
+}
+
 func main() {
     fmt.Println("SRS(simple-rtmp-server) written by google go language.")
     fmt.Println("RTMP Protocol Stack: ", rtmp.Version)
@@ -53,37 +94,22 @@ func main() {
 			return;
 		}
 
-		do_serve :=func(conn *net.TCPConn) (err error) {
-			var r rtmp.RtmpServer
-			if r, err = rtmp.NewRtmpServer(conn); err != nil {
-				return
-			}
-
-			if err = r.Handshake(); err != nil {
-				return
-			}
-
-			req := rtmp.NewRtmpRequest()
-			if err = r.ConnectApp(req); err != nil {
-				return
-			}
-			fmt.Printf("request, tcUrl=%v(vhost=%v, app=%v), AMF%v, pageUrl=%v, swfUrl=%v\n",
-				req.TcUrl, req.Vhost, req.App, req.ObjectEncoding, req.PageUrl, req.SwfUrl)
-
-			return
-		}
-
 		serve := func(conn *net.TCPConn) {
 			defer conn.Close()
 
 			fmt.Println("get client:", conn.RemoteAddr())
-			err := do_serve(conn)
-			if err != nil {
+
+			var client *SrsClient
+			if client, err = NewSrsClient(conn); err != nil {
 				fmt.Println("error:", err)
 				return
 			}
 
-			fmt.Println("serve client completed")
+			if err = client.do_cycle(); err != nil {
+				fmt.Println("serve client error:", err)
+			} else {
+				fmt.Println("serve client completed")
+			}
 		}
 		go serve(conn)
 	}
