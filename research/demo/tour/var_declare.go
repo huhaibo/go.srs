@@ -21,9 +21,13 @@ func auto_local_var() (int, bool) {
 
 type Winlin struct {
 	name string
+	age int
 }
 
 func main() {
+	var winlin Winlin
+	fmt.Println("var winlin is", winlin, ", ptr is", &winlin)
+
 	a, b, c, d, e := ret_local_var()
 	fmt.Printf("ret_local_var() (int, int, bool, bool, bool)\n\tret=%v,%v,%v,%v,%v\n", a, b, c, d, e)
 

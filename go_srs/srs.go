@@ -62,9 +62,13 @@ func main() {
 			if err = r.Handshake(); err != nil {
 				return
 			}
-			if err = r.ConnectApp(); err != nil {
+
+			req := rtmp.NewRtmpRequest()
+			if err = r.ConnectApp(req); err != nil {
 				return
 			}
+			fmt.Printf("request, tcUrl=%v(vhost=%v, app=%v), AMF%v, pageUrl=%v, swfUrl=%v\n",
+				req.TcUrl, req.Vhost, req.App, req.ObjectEncoding, req.PageUrl, req.SwfUrl)
 
 			return
 		}
