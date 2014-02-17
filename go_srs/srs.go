@@ -65,6 +65,9 @@ func (r *SrsClient) do_cycle() (err error) {
 	return
 }
 func (r *SrsClient) service_cycle() (err error) {
+	if err = r.rtmp.SetWindowAckSize(2.5 * 1000 * 1000); err != nil {
+		return
+	}
 	return
 }
 
