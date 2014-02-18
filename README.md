@@ -29,7 +29,7 @@ SRS转码：SRS可以用ffmpeg转码，为转码的开源方案。
 Chnvideo：商业方案
 </pre>
 
-### GO的安装
+### GO开发环境
 
 参考[http://golang.org/doc/install](http://golang.org/doc/install)<br/>
 <strong>Step 1:</strong>下载GO<br/>
@@ -60,6 +60,7 @@ go get github.com/winlinvip/go.srs/go_srs
 <pre>
 $GOPATH/bin/go_srs
 </pre>
+注意：编译出来的go_srs不依赖于GO开发环境，可以独立部署。
 
 Beijing, 2014<br/>
 Winlin
