@@ -62,6 +62,6 @@ $GOPATH/bin/go_srs
 </pre>
 注意：编译出来的go_srs不依赖于GO开发环境，可以独立部署。
 
-Beijing, 2014<br/>
+Beijing, 2014.1<br/>
 Winlin
 
