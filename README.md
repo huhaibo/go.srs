@@ -46,7 +46,7 @@ export PATH=$PATH:$GOROOT/bin
 </pre>
 注意：所有环境变量的设置可以编辑/etc/profile
 
-### 使用方法(Usage)
+### 编译方法(Build)
 
 <strong>Step 1:</strong> set GOPATH if not set<br/>
 <pre>
