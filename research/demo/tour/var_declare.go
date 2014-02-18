@@ -25,6 +25,9 @@ type Winlin struct {
 }
 
 func main() {
+	str := "abcdefg"
+	fmt.Println([]byte(str))
+
 	var winlin Winlin
 	fmt.Println("var winlin is", winlin, ", ptr is", &winlin)
 

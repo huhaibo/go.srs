@@ -27,6 +27,20 @@ import (
 	"github.com/winlinvip/go.rtmp/rtmp"
 )
 
+// current release version
+const RTMP_SIG_SRS_VERSION = "0.9.0"
+// = server = info.
+const RTMP_SIG_SRS_KEY = "srs"
+const RTMP_SIG_SRS_ROLE = "origin = server"
+const RTMP_SIG_SRS_NAME = RTMP_SIG_SRS_KEY+"(simple = rtmp = server)"
+const RTMP_SIG_SRS_URL_SHORT = "github.com/winlinvip/simple-rtmp-server"
+const RTMP_SIG_SRS_URL = "https://"+RTMP_SIG_SRS_URL_SHORT
+const RTMP_SIG_SRS_WEB = "http://blog.csdn.net/win_lin"
+const RTMP_SIG_SRS_EMAIL = "winlin@vip.126.com"
+const RTMP_SIG_SRS_LICENSE = "The MIT License (MIT)"
+const RTMP_SIG_SRS_COPYRIGHT = "Copyright (c) 2014 winlin"
+const RTMP_SIG_SRS_PRIMARY_AUTHROS = "winlin"
+
 /**
 * the client provides the main logic control for RTMP clients.
 */
@@ -70,6 +84,20 @@ func (r *SrsClient) service_cycle() (err error) {
 		return
 	}
 	fmt.Printf("set window ack size to %v\n", ack_size)
+
+	bandwidth, bw_type := uint32(2.5 * 1000 * 1000), byte(2)
+	if err = r.rtmp.SetPeerBandwidth(bandwidth, bw_type); err != nil {
+		return
+	}
+	fmt.Printf("set bandwidth to %v, type=%v\n", bandwidth, bw_type)
+
+	if err = r.rtmp.ReponseConnectApp(r.req, "", nil); err != nil {
+		return
+	}
+	fmt.Printf("response connect app success\n")
+
+	// do bandwidth test if connect to the vhost which is for bandwidth check.
+	// TODO: FIXME: implements it
 	return
 }
 
