@@ -28,7 +28,7 @@ import (
 )
 
 // current release version
-const RTMP_SIG_SRS_VERSION = "0.9.0"
+const RTMP_SIG_SRS_VERSION = "0.1.0"
 // = server = info.
 const RTMP_SIG_SRS_KEY = "go.srs"
 const RTMP_SIG_SRS_ROLE = "stream server"
@@ -91,23 +91,31 @@ func (r *SrsClient) service_cycle() (err error) {
 	}
 	fmt.Printf("set bandwidth to %v, type=%v\n", bandwidth, bw_type)
 
-	extra_data := map[string]string {
-		"srs_server": RTMP_SIG_SRS_KEY + " " + RTMP_SIG_SRS_VERSION + " (" + RTMP_SIG_SRS_URL_SHORT + ")",
-		"srs_license": RTMP_SIG_SRS_LICENSE,
-		"srs_role": RTMP_SIG_SRS_ROLE,
-		"srs_url": RTMP_SIG_SRS_URL,
-		"srs_version": RTMP_SIG_SRS_VERSION,
-		"srs_site": RTMP_SIG_SRS_WEB,
-		"srs_email": RTMP_SIG_SRS_EMAIL,
-		"srs_copyright": RTMP_SIG_SRS_COPYRIGHT,
-		"srs_primary_authors": RTMP_SIG_SRS_PRIMARY_AUTHROS,
+	// do bandwidth test if connect to the vhost which is for bandwidth check.
+	// TODO: FIXME: implements it
+
+	extra_data := []map[string]string {
+		{ "srs_sig": RTMP_SIG_SRS_KEY },
+		{ "srs_server": RTMP_SIG_SRS_KEY + " " + RTMP_SIG_SRS_VERSION + " (" + RTMP_SIG_SRS_URL_SHORT + ")" },
+		{ "srs_license": RTMP_SIG_SRS_LICENSE },
+		{ "srs_role": RTMP_SIG_SRS_ROLE },
+		{ "srs_url": RTMP_SIG_SRS_URL },
+		{ "srs_version": RTMP_SIG_SRS_VERSION },
+		{ "srs_site": RTMP_SIG_SRS_WEB },
+		{ "srs_email": RTMP_SIG_SRS_EMAIL },
+		{ "srs_copyright": RTMP_SIG_SRS_COPYRIGHT },
+		{ "srs_primary_authors": RTMP_SIG_SRS_PRIMARY_AUTHROS },
 	}
 	if err = r.rtmp.ReponseConnectApp(r.req, "", extra_data); err != nil {
 		return
 	}
 	fmt.Printf("response connect app success\n")
 
-	// do bandwidth test if connect to the vhost which is for bandwidth check.
+	if err = r.rtmp.CallOnBWDone(); err != nil {
+		return
+	}
+	fmt.Printf("call client as onBWDone()\n")
+
 	// TODO: FIXME: implements it
 	return
 }
