@@ -30,10 +30,10 @@ import (
 // current release version
 const RTMP_SIG_SRS_VERSION = "0.9.0"
 // = server = info.
-const RTMP_SIG_SRS_KEY = "srs"
-const RTMP_SIG_SRS_ROLE = "origin = server"
+const RTMP_SIG_SRS_KEY = "go.srs"
+const RTMP_SIG_SRS_ROLE = "stream server"
 const RTMP_SIG_SRS_NAME = RTMP_SIG_SRS_KEY+"(simple = rtmp = server)"
-const RTMP_SIG_SRS_URL_SHORT = "github.com/winlinvip/simple-rtmp-server"
+const RTMP_SIG_SRS_URL_SHORT = "github.com/winlinvip/go.srs"
 const RTMP_SIG_SRS_URL = "https://"+RTMP_SIG_SRS_URL_SHORT
 const RTMP_SIG_SRS_WEB = "http://blog.csdn.net/win_lin"
 const RTMP_SIG_SRS_EMAIL = "winlin@vip.126.com"
@@ -91,7 +91,18 @@ func (r *SrsClient) service_cycle() (err error) {
 	}
 	fmt.Printf("set bandwidth to %v, type=%v\n", bandwidth, bw_type)
 
-	if err = r.rtmp.ReponseConnectApp(r.req, "", nil); err != nil {
+	extra_data := map[string]string {
+		"srs_server": RTMP_SIG_SRS_KEY + " " + RTMP_SIG_SRS_VERSION + " (" + RTMP_SIG_SRS_URL_SHORT + ")",
+		"srs_license": RTMP_SIG_SRS_LICENSE,
+		"srs_role": RTMP_SIG_SRS_ROLE,
+		"srs_url": RTMP_SIG_SRS_URL,
+		"srs_version": RTMP_SIG_SRS_VERSION,
+		"srs_site": RTMP_SIG_SRS_WEB,
+		"srs_email": RTMP_SIG_SRS_EMAIL,
+		"srs_copyright": RTMP_SIG_SRS_COPYRIGHT,
+		"srs_primary_authors": RTMP_SIG_SRS_PRIMARY_AUTHROS,
+	}
+	if err = r.rtmp.ReponseConnectApp(r.req, "", extra_data); err != nil {
 		return
 	}
 	fmt.Printf("response connect app success\n")
