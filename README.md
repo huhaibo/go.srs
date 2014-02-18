@@ -29,6 +29,23 @@ SRS转码：SRS可以用ffmpeg转码，为转码的开源方案。
 Chnvideo：商业方案
 </pre>
 
+### GO的安装
+
+参考[http://golang.org/doc/install](http://golang.org/doc/install)<br/>
+<strong>Step 1:</strong>下载GO<br/>
+https://code.google.com/p/go/downloads/list<br/>
+<strong>Step 2:</strong>解压GO<br/>
+<pre>
+tar xf go1.2.linux-amd64.tar.gz
+sudo ln -sf `pwd`/go /usr/local/go
+</pre>
+<strong>Step 3:</strong>设置环境变量<br/>
+<pre>
+export GOROOT=/usr/local/go
+export PATH=$PATH:$GOROOT/bin
+</pre>
+注意：所有环境变量的设置可以编辑/etc/profile
+
 ### 使用方法(Usage)
 
 <strong>Step 1:</strong> set GOPATH if not set<br/>
