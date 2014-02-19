@@ -33,7 +33,7 @@ func close_channel() {
 	ch := make(chan int)
 	qc := make(chan int)
 
-	go func(ch chan int, qc chan int) {
+	go func() {
 		for {
 			v, ok := <- ch
 			fmt.Println("get a value from channel:", v, ok)
@@ -42,7 +42,7 @@ func close_channel() {
 			}
 		}
 		qc <- 1
-	} (ch, qc)
+	} ()
 
 	time.Sleep(3)
 	ch <- 1
