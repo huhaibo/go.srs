@@ -189,8 +189,20 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		// TODO: FIXME: implements it.
 
 		return err
-	// FMLEPublish
-	// TODO: FIXME: implements it.
+	case rtmp.CLIENT_TYPE_FMLEPublish:
+		if err = r.rtmp.StartFMLEPublish(r.res.StreamId()); err != nil {
+			return
+		}
+		fmt.Println("start FMLE publish stream")
+
+		// on_publish
+		// TODO: FIXME: implements it.
+
+		err = r.fmle_publishing(source)
+
+		// on_unpublish
+		// TODO: FIXME: implements it.
+		return err
 	case rtmp.CLIENT_TYPE_FlashPublish:
 		if err = r.rtmp.StartFlashPublish(r.res.StreamId()); err != nil {
 			return
@@ -292,6 +304,10 @@ func (r *SrsClient) process_play_control_msg(msg *rtmp.Message) (err error) {
 	return
 }
 
+func (r *SrsClient) fmle_publishing(source *SrsSource) (err error) {
+	// TODO: FIXME: implements it.
+	return
+}
 func (r *SrsClient) flash_publishing(source *SrsSource) (err error) {
 	// refer check
 	// TODO: FIXME: implements it.
