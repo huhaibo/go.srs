@@ -201,7 +201,7 @@ func (r *SrsClient) service_cycle() (err error) {
 	return
 }
 func (r *SrsClient) stream_service_cycle() (err error) {
-	var client_type int
+	var client_type string
 	if client_type, r.req.Stream, err = r.rtmp.IdentifyClient(r.res); err != nil {
 		return
 	}
