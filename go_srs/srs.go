@@ -41,22 +41,77 @@ const RTMP_SIG_SRS_LICENSE = "The MIT License (MIT)"
 const RTMP_SIG_SRS_COPYRIGHT = "Copyright (c) 2014 winlin"
 const RTMP_SIG_SRS_PRIMARY_AUTHROS = "winlin"
 
+// system control message,
+// not an error, but special control logic.
+// sys ctl: rtmp close stream, support replay.
+const ERROR_CONTROL_RTMP_CLOSE = 100
+
+/**
+* whether the error code is an system control error.
+*/
+// @see: srs_is_system_control_error
+func IsSystemControlError(err error) (bool) {
+	if re, ok := err.(SrsError); ok {
+		switch re.code {
+		case ERROR_CONTROL_RTMP_CLOSE:
+			return true
+		}
+	}
+	return false
+}
+
+func IsSystemControlRtmpClose(err error) (bool) {
+	if re, ok := err.(SrsError); ok {
+		return re.code == ERROR_CONTROL_RTMP_CLOSE
+	}
+	return false
+}
+
+type SrsError struct {
+	code int
+	desc string
+}
+func (err SrsError) Error() string {
+	return fmt.Sprintf("srs error code=%v: %s", err.code, err.desc)
+}
+
+// default stream id for response the createStream request.
+const SRS_DEFAULT_SID = 1
+
+/**
+* the response info for srs.
+ */
+type SrsResponse struct {
+	stream_id int
+}
+func NewSrsResponse() (*SrsResponse) {
+	r := &SrsResponse{}
+	r.stream_id = SRS_DEFAULT_SID
+	return r
+}
+// interface RtmpStreamIdGenerator
+func (r *SrsResponse) StreamId() (n int) {
+	return r.stream_id
+}
+
 /**
 * the client provides the main logic control for RTMP clients.
 */
 type SrsClient struct {
 	conn *net.TCPConn
-	rtmp rtmp.RtmpServer
-	req *rtmp.RtmpRequest
+	rtmp rtmp.Server
+	req *rtmp.Request
+	res *SrsResponse
 }
 func NewSrsClient(conn *net.TCPConn) (r *SrsClient, err error) {
 	r = &SrsClient{}
 	r.conn = conn
+	r.res = NewSrsResponse()
 
-	if r.rtmp, err = rtmp.NewRtmpServer(conn); err != nil {
+	if r.rtmp, err = rtmp.NewServer(conn); err != nil {
 		return
 	}
-	r.req = rtmp.NewRtmpRequest()
+	r.req = rtmp.NewRequest()
 	return
 }
 
@@ -116,7 +171,41 @@ func (r *SrsClient) service_cycle() (err error) {
 	}
 	fmt.Printf("call client as onBWDone()\n")
 
-	// TODO: FIXME: implements it
+	for {
+		err = r.stream_service_cycle()
+
+		// stream service must terminated with error, never success.
+		if err == nil {
+			fmt.Println("stream service should nerver terminate success")
+			return
+		}
+
+		// when not system control error, fatal error, return.
+		if !IsSystemControlError(err) {
+			fmt.Println("stream service cycle failed,", err)
+			return
+		}
+
+		// for "some" system control error,
+		// logical accept and retry stream service.
+		if IsSystemControlRtmpClose(err) {
+			fmt.Println("control message(close) accept, retry stream service.")
+			continue
+		}
+
+		// for other system control message, fatal error.
+		fmt.Println("control message reject as error")
+		return
+	}
+
+	return
+}
+func (r *SrsClient) stream_service_cycle() (err error) {
+	var client_type int
+	if client_type, r.req.Stream, err = r.rtmp.IdentifyClient(r.res); err != nil {
+		return
+	}
+	fmt.Printf("identify client success, type=%v, stream=%v\n", client_type, r.req.Stream)
 	return
 }
 
