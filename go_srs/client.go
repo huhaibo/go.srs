@@ -194,6 +194,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 
 	return
 }
+
 func (r *SrsClient) playing(source *SrsSource) (err error) {
 	defer func() {
 		if r.consumer == nil {
