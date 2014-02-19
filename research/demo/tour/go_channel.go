@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-func main() {
+func control_channel() {
 	fmt.Println("channel demo.")
 	var my_go_routine = func(cmd chan int, data chan string){
 		<- cmd
-		fmt.Println("go routine run")
-		time.Sleep(1 * time.Second)
+		fmt.Println("go routine run, quit in 3s")
+		time.Sleep(3 * time.Second)
 		data <- "success"
 		fmt.Println("go routine quit")
 	}
@@ -27,4 +27,35 @@ func main() {
 
 	v := <- data
 	fmt.Println("exit, data is", v)
+}
+
+func close_channel() {
+	ch := make(chan int)
+	qc := make(chan int)
+
+	go func(ch chan int, qc chan int) {
+		for {
+			v, ok := <- ch
+			fmt.Println("get a value from channel:", v, ok)
+			if !ok {
+				time.Sleep(3 * time.Second)
+			}
+		}
+		qc <- 1
+	} (ch, qc)
+
+	time.Sleep(3)
+	ch <- 1
+	ch <- 2
+	ch <- 3
+	close(ch)
+
+	fmt.Println("wait for goroutine to quit.")
+	<- qc
+}
+
+func main() {
+	close_channel()
+	return
+	control_channel()
 }
