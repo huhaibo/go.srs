@@ -130,8 +130,8 @@ func (r *SrsClient) service_cycle() (err error) {
 
 		// stream service must terminated with error, never success.
 		if err == nil {
-			fmt.Println("stream service should nerver terminate success")
-			return
+			fmt.Println("stream service complete success, re-identify it")
+			continue
 		}
 
 		// when not system control error, fatal error, return.
@@ -182,14 +182,30 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 
 		// on_play
 		// TODO: FIXME: implements it.
+
 		err = r.playing(source)
 
 		// on_stop
 		// TODO: FIXME: implements it.
 
 		return err
-	// Publish
+	// FMLEPublish
 	// TODO: FIXME: implements it.
+	case rtmp.CLIENT_TYPE_FlashPublish:
+		if err = r.rtmp.StartFlashPublish(r.res.StreamId()); err != nil {
+			return
+		}
+		fmt.Println("start flash publish stream")
+
+		// on_publish
+		// TODO: FIXME: implements it.
+
+		err = r.flash_publishing(source)
+
+		// on_unpublish
+		// TODO: FIXME: implements it.
+
+		return err
 	}
 
 	return
@@ -201,11 +217,14 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 			return
 		}
 
-		if e := r.consumer.Close(); err == nil {
-			err = e
-		} else {
-			fmt.Println("ignore the close error:", e)
+		if e := r.consumer.Close(); e != nil {
+			if err == nil {
+				err = e
+			} else {
+				fmt.Println("ignore the close error:", e)
+			}
 		}
+		r.consumer = nil
 	} ()
 
 	// refer check
@@ -229,7 +248,6 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 			err = nil
 		}
 
-		fmt.Println("play loop recv message")
 		if err = r.process_play_control_msg(msg); err != nil {
 			return
 		}
@@ -271,5 +289,51 @@ func (r *SrsClient) process_play_control_msg(msg *rtmp.Message) (err error) {
 
 	// pause
 	// TODO: FIXME: implements it
+	return
+}
+
+func (r *SrsClient) flash_publishing(source *SrsSource) (err error) {
+	// refer check
+	// TODO: FIXME: implements it.
+
+	// notify the hls to prepare when publish start.
+	// TODO: FIXME: implements it.
+
+	for {
+		// read from client.
+		var msg *rtmp.Message
+		if msg, err = r.rtmp.Protocol().RecvMessage(); err != nil {
+			return
+		}
+
+		// process UnPublish event.
+		if msg.Header.IsAmf0Command() || msg.Header.IsAmf3Command() {
+			fmt.Println("flash publish finished.")
+			return
+		}
+
+		if err = r.process_publish_message(source, msg); err != nil {
+			return
+		}
+	}
+	return
+}
+func (r *SrsClient) process_publish_message(source *SrsSource, msg *rtmp.Message) (err error) {
+	// process audio packet
+	if msg.Header.IsAudio() {
+		if err = source.OnAudio(msg); err != nil {
+			return
+		}
+	}
+
+	// process video packet
+	if msg.Header.IsVideo() {
+		if err = source.OnVideo(msg); err != nil {
+			return
+		}
+	}
+
+	// process onMetaData
+	// TODO: FIXME: implements it.
 	return
 }

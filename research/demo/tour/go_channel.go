@@ -54,8 +54,35 @@ func close_channel() {
 	<- qc
 }
 
+func select_channel() {
+	ch := make(chan int)
+	qc := make(chan int)
+
+	go func(){
+		timeout := time.After(2 * time.Second)
+		for {
+			select{
+			case v1,ok := <- ch:
+				fmt.Println("got", v1, ok)
+			case <- timeout:
+				fmt.Println("tick")
+			default:
+				fmt.Printf("not ready\n")
+				time.Sleep(3 * time.Second)
+			}
+		}
+		qc <- 0
+	}()
+
+	time.Sleep(5 * time.Second)
+	ch <- 1000
+
+	<- qc
+}
+
 func main() {
-	close_channel()
+	select_channel()
 	return
+	close_channel()
 	control_channel()
 }
