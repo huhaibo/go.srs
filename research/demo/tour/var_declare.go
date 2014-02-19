@@ -24,7 +24,18 @@ type Winlin struct {
 	age int
 }
 
+func my_declare_ret() (n int) {
+	n = 10
+	if n, ok := 100, true; ok && n > 0 {
+		return
+	}
+	return
+}
+
 func main() {
+	// n is shadowed during return
+	//fmt.Println(my_declare_ret())
+
 	str := "abcdefg"
 	fmt.Println([]byte(str))
 

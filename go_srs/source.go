@@ -27,13 +27,46 @@ import (
 
 var source_pool map[string]*SrsSource = map[string]*SrsSource{}
 
+/**
+* live streaming source.
+*/
 type SrsSource struct {
 	req *rtmp.Request
 }
+/**
+* find stream by vhost/app/stream.
+* @param req the client request.
+* @return the matched source, never be NULL.
+* @remark stream_url should without port and schema.
+*/
 func FindSrsSource(req *rtmp.Request) (*SrsSource) {
 	stream_url := req.StreamUrl()
 	if _, ok := source_pool[stream_url]; !ok {
 		source_pool[stream_url] = &SrsSource{req:req}
 	}
 	return source_pool[stream_url]
+}
+func (r *SrsSource) CreateConsumer() (*SrsConsumer) {
+	return NewSrsConsumer(r)
+}
+
+/**
+* the consumer for SrsSource, that is a play client.
+*/
+type SrsConsumer struct {
+	source *SrsSource
+	msgs chan *rtmp.Message
+}
+func NewSrsConsumer(source *SrsSource) (*SrsConsumer) {
+	r := &SrsConsumer{}
+	r.source = source
+	// TODO: FIXME: use buffered channel
+	r.msgs = make(chan *rtmp.Message)
+	return r
+}
+/**
+* close the consumer, for example, client play another source.
+ */
+func (r *SrsConsumer) Close() (err error) {
+	return
 }

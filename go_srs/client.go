@@ -25,6 +25,7 @@ import (
 	"net"
 	"fmt"
 	"github.com/winlinvip/go.rtmp/rtmp"
+	"time"
 )
 
 // default stream id for response the createStream request.
@@ -54,6 +55,7 @@ type SrsClient struct {
 	rtmp rtmp.Server
 	req *rtmp.Request
 	res *SrsResponse
+	consumer *SrsConsumer
 }
 func NewSrsClient(conn *net.TCPConn) (r *SrsClient, err error) {
 	r = &SrsClient{}
@@ -177,9 +179,96 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 			return
 		}
 		fmt.Println("start play stream")
-		if source == nil {
-		}
+
+		// on_play
+		// TODO: FIXME: implements it.
+		err = r.playing(source)
+
+		// on_stop
+		// TODO: FIXME: implements it.
+
+		return err
+	// Publish
+	// TODO: FIXME: implements it.
 	}
 
+	return
+}
+func (r *SrsClient) playing(source *SrsSource) (err error) {
+	defer func() {
+		if r.consumer == nil {
+			return
+		}
+
+		if e := r.consumer.Close(); err == nil {
+			err = e
+		} else {
+			fmt.Println("ignore the close error:", e)
+		}
+	} ()
+
+	// refer check
+	// TODO: FIXME: implements it.
+
+	r.consumer = source.CreateConsumer()
+
+	// SrsPithyPrint
+	// TODO: FIXME: implements it.
+	for {
+		r.conn.SetReadDeadline(time.Now().Add(time.Millisecond * SRS_PULSE_TIMEOUT_MS))
+
+		// read from client.
+		var msg *rtmp.Message
+		if msg, err = r.rtmp.Protocol().RecvMessage(); err != nil {
+			// if not tiemout error, return
+			if neterr, ok := err.(net.Error); !ok || !neterr.Timeout() {
+				return
+			}
+			// ignore the timeout error
+			err = nil
+		}
+
+		fmt.Println("play loop recv message")
+		if err = r.process_play_control_msg(msg); err != nil {
+			return
+		}
+
+		// get messages from consumer.
+		var consumer_has_message = true
+		for consumer_has_message {
+			select {
+			case msg = <- r.consumer.msgs:
+				// sendout messages
+				if err = r.rtmp.Protocol().SendMessage(msg, uint32(r.res.StreamId())); err != nil {
+					return
+				}
+			default:
+				consumer_has_message = false
+			}
+		}
+	}
+	return
+}
+func (r *SrsClient) process_play_control_msg(msg *rtmp.Message) (err error) {
+	// ignore all empty message.
+	if msg == nil {
+		return
+	}
+
+	if !msg.Header.IsAmf0Command() && !msg.Header.IsAmf3Command() {
+		return
+	}
+
+	var pkt interface {}
+	if pkt, err = r.rtmp.Protocol().DecodeMessage(msg); err != nil {
+		return
+	}
+
+	if _, ok := pkt.(*rtmp.CloseStreamPacket); ok {
+		return SrsError{code:ERROR_CONTROL_RTMP_CLOSE, desc:"system control message: rtmp close stream"}
+	}
+
+	// pause
+	// TODO: FIXME: implements it
 	return
 }
