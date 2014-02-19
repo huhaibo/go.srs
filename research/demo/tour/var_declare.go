@@ -28,6 +28,10 @@ func main() {
 	str := "abcdefg"
 	fmt.Println([]byte(str))
 
+	//no new variables on left side of :=
+	//str := "new string"
+	//fmt.Println(str)
+
 	var winlin Winlin
 	fmt.Println("var winlin is", winlin, ", ptr is", &winlin)
 

@@ -176,6 +176,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		if err = r.rtmp.StartPlay(r.res.StreamId()); err != nil {
 			return
 		}
+		fmt.Println("start play stream")
 		if source == nil {
 		}
 	}
