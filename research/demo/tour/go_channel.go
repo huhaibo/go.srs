@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"time"
+	"runtime"
 )
 
 func control_channel() {
@@ -80,9 +81,45 @@ func select_channel() {
 	<- qc
 }
 
+func close_write_channel() {
+	ch := make(chan int, 3)
+
+	pfun := func(id int){
+		defer func(){
+			if r := recover(); r != nil {
+				if re, ok := r.(runtime.Error); ok {
+					fmt.Println("runtime.Error:", re)
+				}
+				return
+			}
+		}()
+		for {
+			// if channel closed:
+			// panic: runtime error: send on closed channel
+			ch <- id
+			time.Sleep(time.Duration(id) * time.Second)
+		}
+	}
+	go pfun(1)
+	go pfun(2)
+
+	for i := 0; i < 3; i++ {
+		v, ok := <-ch
+		fmt.Println(v, ok)
+	}
+	close(ch)
+
+	for {
+		v, ok := <-ch
+		fmt.Println(v, ok)
+		time.Sleep(1 * time.Second)
+	}
+}
+
 func main() {
-	select_channel()
+	close_write_channel()
 	return
+	select_channel()
 	close_channel()
 	control_channel()
 }
