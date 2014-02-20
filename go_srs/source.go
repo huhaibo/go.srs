@@ -111,7 +111,7 @@ func NewSrsConsumer(source *SrsSource) (*SrsConsumer) {
 	r := &SrsConsumer{}
 	r.source = source
 	// TODO: FIXME: use buffered channel
-	r.msgs = make(chan *rtmp.Message)
+	r.msgs = make(chan *rtmp.Message, 1000)
 	return r
 }
 func (r *SrsConsumer) OnMessage(msg *rtmp.Message, tba int, tbv int) (err error) {
