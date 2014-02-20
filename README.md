@@ -6,14 +6,14 @@ go.srs
 ### 产品定位
 
 GO.SRS和SRS的定位不太一样，可以互补。<br/>
-SRS主要是RTMP源站，外加HLS和转码，单进程（通过转码消耗系统能力）。<br/>
-GO.SRS主要是流服务器，包括源站和边缘，支持RTMP/RTMPT/RTMPE/RTMPS/HLS/DASH/RTMFP/RTSP等，支持多进程。<br/>
+SRS主要是RTMP源站，外加HLS和转码，单线程（通过转码消耗系统能力）。<br/>
+GO.SRS主要是流服务器，包括源站和边缘，支持RTMP/RTMPT/RTMPE/RTMPS/HLS/DASH/RTMFP/RTSP等，支持多线程。<br/>
 如下图所示：
 <pre>
 +---------------------------+    +------------------------------+
 |     GO.SRS(流服务器)      +-->-+  SRS转码/Chnvideo编转码集群  |
 |   (IPv4/IPv6/TCP/UDP)     |    +------------------------------+
-| (源站/边缘/单进程/多进程) |                                    
+| (源站/边缘/单线程/多线程) |                                    
 | (RTMP/RTMPE/RTMPT/RTMPS)  |    +------------------------------+
 |   (HTTP/HLS/HDS/DASH)     |-->-+  Chnvideo收录/时移/播放器    |
 |     (RTSP,RTMFP)          |    +------------------------------+
