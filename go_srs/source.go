@@ -25,6 +25,7 @@ import (
 	"github.com/winlinvip/go.rtmp/rtmp"
 	"container/list"
 	"fmt"
+	"sync"
 )
 
 var source_pool map[string]*SrsSource = map[string]*SrsSource{}
@@ -37,6 +38,7 @@ type SrsSource struct {
 	req *rtmp.Request
 	// the consumer list
 	consumers *list.List
+	consumers_lock *sync.Mutex
 	/**
 	* the sample rate of audio in metadata.
 	*/
@@ -59,22 +61,32 @@ func FindSrsSource(req *rtmp.Request) (*SrsSource) {
 		r := &SrsSource{}
 		r.req = req
 		r.consumers = list.New()
+		r.consumers_lock = &sync.Mutex{}
 
 		source_pool[stream_url] = r
 	}
 	return source_pool[stream_url]
 }
 func (r *SrsSource) CreateConsumer() (*SrsConsumer) {
+	r.consumers_lock.Lock()
+	defer r.consumers_lock.Unlock()
+
 	v := NewSrsConsumer(r)
 	v.elem = r.consumers.PushBack(v)
 	return v
 }
 func (r *SrsSource) RemoveConsumer(v *SrsConsumer){
+	r.consumers_lock.Lock()
+	defer r.consumers_lock.Unlock()
+
 	if v.elem != nil {
 		r.consumers.Remove(v.elem)
 	}
 }
 func (r *SrsSource) OnAudio(msg *rtmp.Message) (err error) {
+	r.consumers_lock.Lock()
+	defer r.consumers_lock.Unlock()
+
 	// SRS_HLS
 	// TODO: FIXME: implements it.
 
@@ -88,6 +100,9 @@ func (r *SrsSource) OnAudio(msg *rtmp.Message) (err error) {
 	return
 }
 func (r *SrsSource) OnVideo(msg *rtmp.Message) (err error) {
+	r.consumers_lock.Lock()
+	defer r.consumers_lock.Unlock()
+
 	// SRS_HLS
 	// TODO: FIXME: implements it.
 

@@ -18,9 +18,9 @@ func channel_share_fun(count int, ch chan int) {
 		}
 	}
 }
-func channel_share() {
+func channel_share(nb_count int) {
 	ch := make(chan int)
-	c0, c1 := 10, 240745
+	c0, c1 := 10, nb_count
 	for i := 0; i < c0; i++ {
 		go channel_share_fun(c1, ch)
 	}
@@ -31,9 +31,9 @@ func channel_share() {
 		fmt.Println("quit, v=", v, ",expect=", c0*c1, ", success=", v == c0*c1)
 	}
 }
-func channel_share_2CPU() {
+func channel_share_2CPU(nb_count int) {
 	runtime.GOMAXPROCS(2)
-	channel_share()
+	channel_share(nb_count)
 }
 
 func defer_test_fun(id int, ch chan int) {
@@ -164,10 +164,10 @@ func share_variable_lock_2CPU() {
 func main() {
 	fmt.Println("test the sync of go, to communicate by sharing memory")
 	//defer_test()
-	//channel_share()
-	channel_share_2CPU()
+	//channel_share(2755245)
+	//channel_share_2CPU(900)
 	//share_variable()
 	//share_variable_lock()
 	//share_variable_2CPU()
-	//share_variable_lock_2CPU()
+	share_variable_lock_2CPU()
 }
