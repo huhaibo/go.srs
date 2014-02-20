@@ -24,7 +24,6 @@ package main
 import (
 	"github.com/winlinvip/go.rtmp/rtmp"
 	"container/list"
-	"fmt"
 	"sync"
 )
 
@@ -56,7 +55,6 @@ type SrsSource struct {
 */
 func FindSrsSource(req *rtmp.Request) (*SrsSource) {
 	stream_url := req.StreamUrl()
-	fmt.Println("discovery source", stream_url)
 	if _, ok := source_pool[stream_url]; !ok {
 		r := &SrsSource{}
 		r.req = req

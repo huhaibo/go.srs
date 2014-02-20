@@ -166,6 +166,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 
 	// find a source to serve.
 	source := FindSrsSource(r.req)
+	fmt.Println("discovery source", r.req.StreamUrl())
 
 	// check publish available.
 	// TODO: FIXME: implements it.
@@ -305,7 +306,37 @@ func (r *SrsClient) process_play_control_msg(msg *rtmp.Message) (err error) {
 }
 
 func (r *SrsClient) fmle_publishing(source *SrsSource) (err error) {
+	// refer check
 	// TODO: FIXME: implements it.
+
+	// notify the hls to prepare when publish start.
+	// TODO: FIXME: implements it.
+
+	for {
+		// read from client.
+		var msg *rtmp.Message
+		if msg, err = r.rtmp.Protocol().RecvMessage(); err != nil {
+			return
+		}
+
+		// process UnPublish event.
+		if msg.Header.IsAmf0Command() || msg.Header.IsAmf3Command() {
+			var pkt interface {}
+			if pkt, err = r.rtmp.Protocol().DecodeMessage(msg); err != nil {
+				return
+			}
+
+			if _, ok := pkt.(*rtmp.FMLEStartPacket); ok {
+				fmt.Println("FMLE publish finished.")
+				return
+			}
+			continue
+		}
+
+		if err = r.process_publish_message(source, msg); err != nil {
+			return
+		}
+	}
 	return
 }
 func (r *SrsClient) flash_publishing(source *SrsSource) (err error) {
