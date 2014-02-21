@@ -23,9 +23,9 @@ package main
 
 import (
 	"net"
-	"fmt"
-	"github.com/winlinvip/go.rtmp/rtmp"
 	"time"
+	"github.com/winlinvip/go.rtmp/rtmp"
+	"io"
 )
 
 // default stream id for response the createStream request.
@@ -56,11 +56,13 @@ type SrsClient struct {
 	req *rtmp.Request
 	res *SrsResponse
 	consumer *SrsConsumer
+	id SrsLogId
 }
 func NewSrsClient(conn *net.TCPConn) (r *SrsClient, err error) {
 	r = &SrsClient{}
 	r.conn = conn
 	r.res = NewSrsResponse()
+	r.id = SrsGenerateId()
 
 	if r.rtmp, err = rtmp.NewServer(conn); err != nil {
 		return
@@ -69,7 +71,30 @@ func NewSrsClient(conn *net.TCPConn) (r *SrsClient, err error) {
 	return
 }
 
+// interface for Log
+func (r *SrsClient) GetId() (SrsLogId) {
+	return r.id
+}
+func (r *SrsClient) GetTag() (SrsLogTag) {
+	return "client"
+}
+
 func (r *SrsClient) do_cycle() (err error) {
+	defer func(r *SrsClient) {
+		if rc := recover(); rc != nil {
+			SrsWarn(r, r, "ignore panic from serve client, err=%v, rc=%v", err, rc)
+			return
+		}
+
+		// ignore the normally closed
+		if err == nil {
+			return
+		}
+		SrsTrace(r, r, "client cycle completed, err=%v", err)
+	}(r)
+
+	SrsTrace(r, r, "start serve client=%v", r.conn.RemoteAddr())
+
 	if err = r.rtmp.Handshake(); err != nil {
 		return
 	}
@@ -77,7 +102,7 @@ func (r *SrsClient) do_cycle() (err error) {
 	if err = r.rtmp.ConnectApp(r.req); err != nil {
 		return
 	}
-	fmt.Printf("request, tcUrl=%v(vhost=%v, app=%v), AMF%v, pageUrl=%v, swfUrl=%v\n",
+	SrsTrace(r, r, "request, tcUrl=%v(vhost=%v, app=%v), AMF%v, pageUrl=%v, swfUrl=%v",
 		r.req.TcUrl, r.req.Vhost, r.req.App, r.req.ObjectEncoding, r.req.PageUrl, r.req.SwfUrl)
 
 	// check_vhost
@@ -92,13 +117,13 @@ func (r *SrsClient) service_cycle() (err error) {
 	if err = r.rtmp.SetWindowAckSize(ack_size); err != nil {
 		return
 	}
-	fmt.Printf("set window ack size to %v\n", ack_size)
+	SrsTrace(r, r, "set window ack size to %v", ack_size)
 
 	bandwidth, bw_type := uint32(2.5 * 1000 * 1000), byte(2)
 	if err = r.rtmp.SetPeerBandwidth(bandwidth, bw_type); err != nil {
 		return
 	}
-	fmt.Printf("set bandwidth to %v, type=%v\n", bandwidth, bw_type)
+	SrsTrace(r, r, "set bandwidth to %v, type=%v", bandwidth, bw_type)
 
 	// do bandwidth test if connect to the vhost which is for bandwidth check.
 	// TODO: FIXME: implements it
@@ -118,37 +143,42 @@ func (r *SrsClient) service_cycle() (err error) {
 	if err = r.rtmp.ReponseConnectApp(r.req, "", extra_data); err != nil {
 		return
 	}
-	fmt.Printf("response connect app success\n")
+	SrsTrace(r, r, "response connect app success")
 
 	if err = r.rtmp.CallOnBWDone(); err != nil {
 		return
 	}
-	fmt.Printf("call client as onBWDone()\n")
+	SrsTrace(r, r, "call client as onBWDone()")
 
 	for {
 		err = r.stream_service_cycle()
 
 		// stream service must terminated with error, never success.
 		if err == nil {
-			fmt.Println("stream service complete success, re-identify it")
+			SrsTrace(r, r, "stream service complete success, re-identify it")
 			continue
 		}
 
 		// when not system control error, fatal error, return.
 		if !IsSystemControlError(err) {
-			fmt.Println("stream service cycle failed,", err)
+			if err == io.EOF {
+				SrsTrace(r, r, "client gracefully close the peer")
+				err = nil
+				return
+			}
+			SrsWarn(r, r, "stream service cycle failed, err=%v", err)
 			return
 		}
 
 		// for "some" system control error,
 		// logical accept and retry stream service.
 		if IsSystemControlRtmpClose(err) {
-			fmt.Println("control message(close) accept, retry stream service.")
+			SrsWarn(r, r, "control message(close) accept, retry stream service.")
 			continue
 		}
 
 		// for other system control message, fatal error.
-		fmt.Println("control message reject as error")
+		SrsTrace(r, r, "control message reject as error, err=%v", err)
 		return
 	}
 
@@ -159,14 +189,14 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 	if client_type, r.req.Stream, err = r.rtmp.IdentifyClient(r.res); err != nil {
 		return
 	}
-	fmt.Printf("identify client success, type=%v, stream=%v\n", client_type, r.req.Stream)
+	SrsTrace(r, r, "identify client success, type=%v, stream=%v", client_type, r.req.Stream)
 
 	// set chunk size to larger.
 	// TODO: FIXME: implements it.
 
 	// find a source to serve.
 	source := FindSrsSource(r.req)
-	fmt.Println("discovery source", r.req.StreamUrl())
+	SrsTrace(r, r, "discovery source by url %v", r.req.StreamUrl())
 
 	// check publish available.
 	// TODO: FIXME: implements it.
@@ -179,7 +209,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		if err = r.rtmp.StartPlay(r.res.StreamId()); err != nil {
 			return
 		}
-		fmt.Println("start play stream")
+		SrsTrace(r, r, "start play stream")
 
 		// on_play
 		// TODO: FIXME: implements it.
@@ -194,7 +224,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		if err = r.rtmp.StartFMLEPublish(r.res.StreamId()); err != nil {
 			return
 		}
-		fmt.Println("start FMLE publish stream")
+		SrsTrace(r, r, "start FMLE publish stream")
 
 		// on_publish
 		// TODO: FIXME: implements it.
@@ -208,7 +238,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		if err = r.rtmp.StartFlashPublish(r.res.StreamId()); err != nil {
 			return
 		}
-		fmt.Println("start flash publish stream")
+		SrsTrace(r, r, "start flash publish stream")
 
 		// on_publish
 		// TODO: FIXME: implements it.
@@ -234,7 +264,7 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 			if err == nil {
 				err = e
 			} else {
-				fmt.Println("ignore the close error:", e)
+				SrsTrace(r, r, "ignore the close err=%v", e)
 			}
 		}
 		r.consumer = nil
@@ -327,7 +357,7 @@ func (r *SrsClient) fmle_publishing(source *SrsSource) (err error) {
 			}
 
 			if _, ok := pkt.(*rtmp.FMLEStartPacket); ok {
-				fmt.Println("FMLE publish finished.")
+				SrsTrace(r, r, "FMLE publish finished.")
 				return
 			}
 			continue
@@ -355,7 +385,7 @@ func (r *SrsClient) flash_publishing(source *SrsSource) (err error) {
 
 		// process UnPublish event.
 		if msg.Header.IsAmf0Command() || msg.Header.IsAmf3Command() {
-			fmt.Println("flash publish finished.")
+			SrsTrace(r, r, "flash publish finished.")
 			return
 		}
 

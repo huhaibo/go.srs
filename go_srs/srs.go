@@ -21,55 +21,8 @@
 
 package main
 
-import (
-	"net"
-	"fmt"
-	"github.com/winlinvip/go.rtmp/rtmp"
-)
-
 func main() {
-    fmt.Println("SRS(simple-rtmp-server) written by google go language.")
-    fmt.Println("RTMP Protocol Stack: ", rtmp.Version)
-
-	addr, err := net.ResolveTCPAddr("tcp4", ":1935")
-	if err != nil {
-		fmt.Println("error:", err)
-		return;
-	}
-
-	var listener *net.TCPListener
-	listener, err = net.ListenTCP("tcp4", addr)
-	if err != nil {
-		fmt.Println("error:", err)
-		return;
-	}
-	defer listener.Close()
-
-	for {
-		fmt.Println("listener ready to accept client")
-		conn, err := listener.AcceptTCP()
-		if err != nil {
-			fmt.Println("error:", err)
-			return;
-		}
-
-		serve := func(conn *net.TCPConn) {
-			defer conn.Close()
-
-			fmt.Println("get client:", conn.RemoteAddr())
-
-			var client *SrsClient
-			if client, err = NewSrsClient(conn); err != nil {
-				fmt.Println("error:", err)
-				return
-			}
-
-			if err = client.do_cycle(); err != nil {
-				fmt.Println("serve client error:", err)
-			} else {
-				fmt.Println("serve client completed")
-			}
-		}
-		go serve(conn)
-	}
+	r := NewSrsServer()
+	r.PrintInfo()
+	r.Serve()
 }

@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"runtime"
+)
 
 func panic_f() {
 	defer fmt.Println("panic occur, defered")
@@ -14,6 +17,7 @@ func my_demo(count *int) (code int) {
 			return
 		}
 		fmt.Println("recover failed in parent function")
+		fmt.Print(runtime.Stack())
 	}()
 
 	code = 0
