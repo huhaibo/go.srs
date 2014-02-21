@@ -22,7 +22,7 @@
 package main
 
 // current release version
-const RTMP_SIG_SRS_VERSION = "0.1.0"
+const RTMP_SIG_SRS_VERSION = "0.1.1"
 // = server = info.
 const RTMP_SIG_SRS_KEY = "go.srs"
 const RTMP_SIG_SRS_ROLE = "stream server"

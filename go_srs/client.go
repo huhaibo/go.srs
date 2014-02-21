@@ -23,9 +23,8 @@ package main
 
 import (
 	"net"
-	"time"
-	"github.com/winlinvip/go.rtmp/rtmp"
 	"io"
+	"github.com/winlinvip/go.rtmp/rtmp"
 )
 
 // default stream id for response the createStream request.
@@ -94,6 +93,9 @@ func (r *SrsClient) do_cycle() (err error) {
 	}(r)
 
 	SrsTrace(r, r, "start serve client=%v", r.conn.RemoteAddr())
+
+	r.rtmp.Protocol().SetReadTimeout(SRS_RECV_TIMEOUT_MS)
+	r.rtmp.Protocol().SetWriteTimeout(SRS_SEND_TIMEOUT_MS)
 
 	if err = r.rtmp.Handshake(); err != nil {
 		return
@@ -174,6 +176,11 @@ func (r *SrsClient) service_cycle() (err error) {
 		// logical accept and retry stream service.
 		if IsSystemControlRtmpClose(err) {
 			SrsWarn(r, r, "control message(close) accept, retry stream service.")
+
+			// set timeout to a larger value, for user paused.
+			r.rtmp.Protocol().SetReadTimeout(SRS_PAUSED_RECV_TIMEOUT_MS)
+			r.rtmp.Protocol().SetWriteTimeout(SRS_PAUSED_SEND_TIMEOUT_MS)
+
 			continue
 		}
 
@@ -190,6 +197,10 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		return
 	}
 	SrsTrace(r, r, "identify client success, type=%v, stream=%v", client_type, r.req.Stream)
+
+	// client is identified, set the timeout to service timeout.
+	r.rtmp.Protocol().SetReadTimeout(SRS_RECV_TIMEOUT_MS)
+	r.rtmp.Protocol().SetWriteTimeout(SRS_SEND_TIMEOUT_MS)
 
 	// set chunk size to larger.
 	// TODO: FIXME: implements it.
@@ -275,11 +286,11 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 
 	r.consumer = source.CreateConsumer()
 
+	r.rtmp.Protocol().SetReadTimeout(SRS_PULSE_TIMEOUT_MS)
+
 	// SrsPithyPrint
 	// TODO: FIXME: implements it.
 	for {
-		r.conn.SetReadDeadline(time.Now().Add(time.Millisecond * SRS_PULSE_TIMEOUT_MS))
-
 		// read from client.
 		var msg *rtmp.Message
 		if msg, err = r.rtmp.Protocol().RecvMessage(); err != nil {
