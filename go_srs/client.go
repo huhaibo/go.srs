@@ -34,16 +34,12 @@ const SRS_DEFAULT_SID = 1
 * the response info for srs.
  */
 type SrsResponse struct {
-	stream_id int
+	stream_id uint32
 }
 func NewSrsResponse() (*SrsResponse) {
 	r := &SrsResponse{}
 	r.stream_id = SRS_DEFAULT_SID
 	return r
-}
-// interface RtmpStreamIdGenerator
-func (r *SrsResponse) StreamId() (n int) {
-	return r.stream_id
 }
 
 /**
@@ -193,7 +189,7 @@ func (r *SrsClient) service_cycle() (err error) {
 }
 func (r *SrsClient) stream_service_cycle() (err error) {
 	var client_type string
-	if client_type, r.req.Stream, err = r.rtmp.IdentifyClient(r.res); err != nil {
+	if client_type, r.req.Stream, err = r.rtmp.IdentifyClient(r.res.stream_id); err != nil {
 		return
 	}
 	SrsTrace(r, r, "identify client success, type=%v, stream=%v", client_type, r.req.Stream)
@@ -217,7 +213,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 
 	switch client_type {
 	case rtmp.CLIENT_TYPE_Play:
-		if err = r.rtmp.StartPlay(r.res.StreamId()); err != nil {
+		if err = r.rtmp.StartPlay(r.res.stream_id); err != nil {
 			return
 		}
 		SrsTrace(r, r, "start play stream")
@@ -232,7 +228,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 
 		return err
 	case rtmp.CLIENT_TYPE_FMLEPublish:
-		if err = r.rtmp.StartFMLEPublish(r.res.StreamId()); err != nil {
+		if err = r.rtmp.StartFMLEPublish(r.res.stream_id); err != nil {
 			return
 		}
 		SrsTrace(r, r, "start FMLE publish stream")
@@ -246,7 +242,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		// TODO: FIXME: implements it.
 		return err
 	case rtmp.CLIENT_TYPE_FlashPublish:
-		if err = r.rtmp.StartFlashPublish(r.res.StreamId()); err != nil {
+		if err = r.rtmp.StartFlashPublish(r.res.stream_id); err != nil {
 			return
 		}
 		SrsTrace(r, r, "start flash publish stream")
@@ -290,6 +286,7 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 
 	// SrsPithyPrint
 	// TODO: FIXME: implements it.
+
 	for {
 		// read from client.
 		var msg *rtmp.Message
@@ -312,7 +309,7 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 			select {
 			case msg = <- r.consumer.msgs:
 				// sendout messages
-				if err = r.rtmp.Protocol().SendMessage(msg, uint32(r.res.StreamId())); err != nil {
+				if err = r.rtmp.Protocol().SendMessage(msg, r.res.stream_id); err != nil {
 					return
 				}
 			default:

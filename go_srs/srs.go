@@ -21,7 +21,24 @@
 
 package main
 
+import (
+	"runtime/pprof"
+	"os"
+	"fmt"
+)
+
 func main() {
+	if false {
+		defer func(){
+			fmt.Println("main return")
+			pprof.StopCPUProfile()
+		}()
+		if f, err := os.Create("srs.prof"); err == nil {
+			fmt.Println("write to prof")
+			pprof.StartCPUProfile(f)
+		}
+	}
+
 	r := NewSrsServer()
 	r.PrintInfo()
 	r.Serve()

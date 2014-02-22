@@ -63,7 +63,7 @@ func (r *SrsServer) Serve() {
 	}
 	defer listener.Close()
 
-	for {
+	for i := 0; true || i < 55; i++ {
 		SrsVerbose(r, r, "listener ready to accept client")
 		conn, err := listener.AcceptTCP()
 		if err != nil {

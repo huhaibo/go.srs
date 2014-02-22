@@ -25,6 +25,7 @@ import (
 	"github.com/winlinvip/go.rtmp/rtmp"
 	"container/list"
 	"sync"
+	"fmt"
 )
 
 var source_pool map[string]*SrsSource = map[string]*SrsSource{}
@@ -91,7 +92,7 @@ func (r *SrsSource) OnAudio(msg *rtmp.Message) (err error) {
 	// copy to all consumer
 	for p := r.consumers.Front(); p != nil; p = p.Next() {
 		p := p.Value.(*SrsConsumer)
-		if err = p.OnMessage(msg, r.sample_rate, r.frame_rate); err != nil {
+		if err = p.OnMessage(msg.Copy(), r.sample_rate, r.frame_rate); err != nil {
 			return
 		}
 	}
@@ -107,7 +108,7 @@ func (r *SrsSource) OnVideo(msg *rtmp.Message) (err error) {
 	// copy to all consumer
 	for p := r.consumers.Front(); p != nil; p = p.Next() {
 		p := p.Value.(*SrsConsumer)
-		if err = p.OnMessage(msg, r.sample_rate, r.frame_rate); err != nil {
+		if err = p.OnMessage(msg.Copy(), r.sample_rate, r.frame_rate); err != nil {
 			return
 		}
 	}
@@ -131,7 +132,13 @@ func NewSrsConsumer(source *SrsSource) (*SrsConsumer) {
 }
 func (r *SrsConsumer) OnMessage(msg *rtmp.Message, tba int, tbv int) (err error) {
 	// TODO: FIXME: drop if overflow.
-	r.msgs <- msg
+	select {
+	case r.msgs <- msg:
+		return
+	default:
+		fmt.Println("drop message")
+		return
+	}
 	return
 }
 /**
