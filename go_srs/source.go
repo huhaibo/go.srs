@@ -25,7 +25,6 @@ import (
 	"github.com/winlinvip/go.rtmp/rtmp"
 	"container/list"
 	"sync"
-	"fmt"
 )
 
 var source_pool map[string]*SrsSource = map[string]*SrsSource{}
@@ -120,25 +119,29 @@ func (r *SrsSource) OnVideo(msg *rtmp.Message) (err error) {
 */
 type SrsConsumer struct {
 	source *SrsSource
-	msgs chan *rtmp.Message
+	msgs []*rtmp.Message
 	elem *list.Element
+	msgs_lock *sync.Mutex
 }
 func NewSrsConsumer(source *SrsSource) (*SrsConsumer) {
 	r := &SrsConsumer{}
 	r.source = source
 	// TODO: FIXME: use buffered channel
-	r.msgs = make(chan *rtmp.Message, 1000)
+	r.msgs = make([]*rtmp.Message, 0)
+	r.msgs_lock = &sync.Mutex{}
 	return r
 }
+func (r *SrsConsumer) Messages() ([]*rtmp.Message) {
+	r.msgs_lock.Lock()
+	defer r.msgs_lock.Unlock()
+	msgs := r.msgs
+	r.msgs = make([]*rtmp.Message, 0)
+	return msgs
+}
 func (r *SrsConsumer) OnMessage(msg *rtmp.Message, tba int, tbv int) (err error) {
-	// TODO: FIXME: drop if overflow.
-	select {
-	case r.msgs <- msg:
-		return
-	default:
-		fmt.Println("drop message")
-		return
-	}
+	r.msgs_lock.Lock()
+	defer r.msgs_lock.Unlock()
+	r.msgs = append(r.msgs, msg)
 	return
 }
 /**
@@ -146,7 +149,6 @@ func (r *SrsConsumer) OnMessage(msg *rtmp.Message, tba int, tbv int) (err error)
  */
 func (r *SrsConsumer) Close() (err error) {
 	r.source.RemoveConsumer(r)
-	close(r.msgs)
 	r.source = nil
 	return
 }

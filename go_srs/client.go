@@ -304,16 +304,15 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 		}
 
 		// get messages from consumer.
-		var consumer_has_message = true
-		for consumer_has_message {
-			select {
-			case msg = <- r.consumer.msgs:
-				// sendout messages
-				if err = r.rtmp.Protocol().SendMessage(msg, r.res.stream_id); err != nil {
-					return
-				}
-			default:
-				consumer_has_message = false
+		msgs := r.consumer.Messages()
+		for i := 0; i < len(msgs); i++ {
+			msg := msgs[i]
+			if msg == nil {
+				break
+			}
+			// sendout messages
+			if err = r.rtmp.Protocol().SendMessage(msg, r.res.stream_id); err != nil {
+				return
 			}
 		}
 	}
