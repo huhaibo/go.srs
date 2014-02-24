@@ -33,6 +33,10 @@ const SRS_MIN_RECV_TIMEOUT_MS = 60*1000
 // generally, it's the pulse time for data seding.
 const SRS_PULSE_TIMEOUT_MS = 200
 
+// the pprof timeout, the ping message recv/send timeout
+const SRS_PPROF_TIMEOUT_MS = 10*60*1000
+const SRS_PPROF_PULSE_MS = 800
+
 // the timeout to wait client data,
 // if timeout, close the connection.
 const SRS_SEND_TIMEOUT_MS = 30*1000

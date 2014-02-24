@@ -25,6 +25,9 @@ import (
 	"net"
 	"io"
 	"github.com/winlinvip/go.rtmp/rtmp"
+	"time"
+	"os"
+	"runtime/pprof"
 )
 
 // default stream id for response the createStream request.
@@ -211,6 +214,13 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 	// enable gop cache if requires
 	// TODO: FIXME: implements it.
 
+	if client_type == rtmp.CLIENT_TYPE_Play {
+		// when play, start pprof when vhost is pprof, and stop when client disconnect
+		if r.req.Vhost == "pprof" {
+			return r.do_pprof()
+		}
+	}
+
 	switch client_type {
 	case rtmp.CLIENT_TYPE_Play:
 		if err = r.rtmp.StartPlay(r.res.stream_id); err != nil {
@@ -256,6 +266,42 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		// TODO: FIXME: implements it.
 
 		return err
+	}
+
+	return
+}
+
+func (r *SrsClient) do_pprof() (err error) {
+	var f *os.File
+	if f, err = os.Create("srs.prof"); err != nil {
+		return
+	}
+	SrsTrace(r, r, "do pprof cycle")
+	pprof.StartCPUProfile(f)
+
+	defer func(id SrsLogIdGetter, tag SrsLogTagGetter) {
+		SrsTrace(id, tag, "pprof finished")
+		pprof.StopCPUProfile()
+	}(r, r)
+
+	r.rtmp.Protocol().SetReadTimeout(SRS_PPROF_TIMEOUT_MS)
+	r.rtmp.Protocol().SetWriteTimeout(SRS_PPROF_TIMEOUT_MS)
+
+	for {
+		// Ping
+		if err = r.rtmp.Ping(uint32(time.Now().Unix())); err != nil {
+			return
+		}
+
+		// read from client.
+		if _, err = r.rtmp.Protocol().RecvMessage(); err != nil {
+			// if not tiemout error, return
+			if neterr, ok := err.(net.Error); !ok || !neterr.Timeout() {
+				return
+			}
+		}
+
+		time.Sleep(SRS_PPROF_PULSE_MS * time.Millisecond)
 	}
 
 	return
