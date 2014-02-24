@@ -336,7 +336,7 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 	// TODO: FIXME: implements it.
 
 	for {
-		// read from client.
+		/*// read from client.
 		var msg *rtmp.Message
 		if msg, err = r.rtmp.Protocol().RecvMessage(); err != nil {
 			// if not tiemout error, return
@@ -349,10 +349,14 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 
 		if err = r.process_play_control_msg(msg); err != nil {
 			return
-		}
+		}*/
 
 		// get messages from consumer.
 		msgs := r.consumer.Messages()
+		if len(msgs) <= 0 {
+			time.Sleep(SRS_PULSE_TIMEOUT_MS * time.Millisecond)
+			continue
+		}
 		for i := 0; i < len(msgs); i++ {
 			msg := msgs[i]
 			if msg == nil {
