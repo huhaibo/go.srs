@@ -78,7 +78,7 @@ func (r *SrsClient) GetTag() (SrsLogTag) {
 }
 
 func (r *SrsClient) do_cycle() (err error) {
-	/*defer func(r *SrsClient) {
+	defer func(r *SrsClient) {
 		if rc := recover(); rc != nil {
 			SrsWarn(r, r, "ignore panic from serve client, err=%v, rc=%v", err, rc)
 			return
@@ -89,7 +89,7 @@ func (r *SrsClient) do_cycle() (err error) {
 			return
 		}
 		SrsTrace(r, r, "client cycle completed, err=%v", err)
-	}(r)*/
+	}(r)
 
 	SrsTrace(r, r, "start serve client=%v", r.conn.RemoteAddr())
 
@@ -327,6 +327,10 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 	r.consumer = source.CreateConsumer()
 
 	r.rtmp.Protocol().SetReadTimeout(SRS_PULSE_TIMEOUT_MS)
+
+	// disable send/recv timeout
+	//r.rtmp.Protocol().SetReadTimeout(0)
+	r.rtmp.Protocol().SetWriteTimeout(0)
 
 	// SrsPithyPrint
 	// TODO: FIXME: implements it.
