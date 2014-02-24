@@ -79,6 +79,9 @@ func (r *SrsClient) GetTag() (SrsLogTag) {
 
 func (r *SrsClient) do_cycle() (err error) {
 	defer func(r *SrsClient) {
+		// destroy the protocol stack.
+		r.rtmp.Destroy()
+
 		if rc := recover(); rc != nil {
 			SrsWarn(r, r, "ignore panic from serve client, err=%v, rc=%v", err, rc)
 			return
@@ -107,6 +110,7 @@ func (r *SrsClient) do_cycle() (err error) {
 	// TODO: FIXME: implements it
 
 	err = r.service_cycle()
+
 	// on_close
 	return
 }
