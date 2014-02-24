@@ -328,15 +328,13 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 
 	r.rtmp.Protocol().SetReadTimeout(SRS_PULSE_TIMEOUT_MS)
 
-	// disable send/recv timeout
-	//r.rtmp.Protocol().SetReadTimeout(0)
-	r.rtmp.Protocol().SetWriteTimeout(0)
-
 	// SrsPithyPrint
 	// TODO: FIXME: implements it.
 
 	for {
-		/*// read from client.
+		// TODO: FIXME: disable send/recv timeout, use channel instead.
+		/*
+		// read from client.
 		var msg *rtmp.Message
 		if msg, err = r.rtmp.Protocol().RecvMessage(); err != nil {
 			// if not tiemout error, return
@@ -353,10 +351,13 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 
 		// get messages from consumer.
 		msgs := r.consumer.Messages()
+
+		// TODO: FIXME: disable send/recv timeout, use channel instead.
 		if len(msgs) <= 0 {
 			time.Sleep(SRS_PULSE_TIMEOUT_MS * time.Millisecond)
 			continue
 		}
+
 		for i := 0; i < len(msgs); i++ {
 			msg := msgs[i]
 			if msg == nil {

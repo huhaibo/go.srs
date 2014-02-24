@@ -21,7 +21,10 @@
 
 package main
 
+import "runtime"
+
 func main() {
+	runtime.GOMAXPROCS(2)
 	r := NewSrsServer()
 	r.PrintInfo()
 	r.Serve()
