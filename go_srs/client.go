@@ -214,11 +214,9 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 	// enable gop cache if requires
 	// TODO: FIXME: implements it.
 
-	if client_type == rtmp.CLIENT_TYPE_Play {
-		// when play, start pprof when vhost is pprof, and stop when client disconnect
-		if r.req.Vhost == "pprof" {
-			return r.do_pprof()
-		}
+	// when play, start pprof when vhost is pprof, and stop when client disconnect
+	if client_type == rtmp.CLIENT_TYPE_Play && r.req.Vhost == SRS_PPROF_VHOST {
+		return r.do_pprof()
 	}
 
 	switch client_type {

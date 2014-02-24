@@ -36,6 +36,7 @@ const SRS_PULSE_TIMEOUT_MS = 200
 // the pprof timeout, the ping message recv/send timeout
 const SRS_PPROF_TIMEOUT_MS = 10*60*1000
 const SRS_PPROF_PULSE_MS = 800
+const SRS_PPROF_VHOST = "pprof"
 
 // the timeout to wait client data,
 // if timeout, close the connection.
