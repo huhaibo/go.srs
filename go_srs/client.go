@@ -319,22 +319,22 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 	// SrsPithyPrint
 	// TODO: FIXME: implements it.
 
+	msg_input_channel := r.rtmp.Protocol().MessageInputChannel()
+	msg_send_channel := r.consumer.Messages()
+
 	for {
-		// get messages from consumer.
-		msgs := r.consumer.Messages()
-
-		// TODO: FIXME: disable send/recv timeout, use channel instead.
-		if len(msgs) <= 0 {
-			time.Sleep(SRS_PULSE_TIMEOUT_MS * time.Millisecond)
-			continue
-		}
-
-		for i := 0; i < len(msgs); i++ {
-			msg := msgs[i]
-			if msg == nil {
-				break
+		select {
+		case msg, ok := <- msg_input_channel:
+			if !ok {
+				return
 			}
-			// sendout messages
+			if err = r.process_play_control_msg(msg); err != nil {
+				return
+			}
+		case msg, ok := <- msg_send_channel:
+			if !ok {
+				return
+			}
 			if err = r.rtmp.Protocol().SendMessage(msg, r.res.stream_id); err != nil {
 				return
 			}
