@@ -78,7 +78,10 @@ func (r *SrsClient) GetTag() (SrsLogTag) {
 }
 
 func (r *SrsClient) do_cycle() (err error) {
-	/*defer func(r *SrsClient) {
+	defer func(r *SrsClient) {
+		// destroy the protocol stack.
+		r.rtmp.Destroy()
+
 		if rc := recover(); rc != nil {
 			SrsWarn(r, r, "ignore panic from serve client, err=%v, rc=%v", err, rc)
 			return
@@ -89,12 +92,9 @@ func (r *SrsClient) do_cycle() (err error) {
 			return
 		}
 		SrsTrace(r, r, "client cycle completed, err=%v", err)
-	}(r)*/
+	}(r)
 
 	SrsTrace(r, r, "start serve client=%v", r.conn.RemoteAddr())
-
-	r.rtmp.Protocol().SetReadTimeout(SRS_RECV_TIMEOUT_MS)
-	r.rtmp.Protocol().SetWriteTimeout(SRS_SEND_TIMEOUT_MS)
 
 	if err = r.rtmp.Handshake(); err != nil {
 		return
@@ -110,6 +110,7 @@ func (r *SrsClient) do_cycle() (err error) {
 	// TODO: FIXME: implements it
 
 	err = r.service_cycle()
+
 	// on_close
 	return
 }
@@ -176,10 +177,6 @@ func (r *SrsClient) service_cycle() (err error) {
 		if IsSystemControlRtmpClose(err) {
 			SrsWarn(r, r, "control message(close) accept, retry stream service.")
 
-			// set timeout to a larger value, for user paused.
-			r.rtmp.Protocol().SetReadTimeout(SRS_PAUSED_RECV_TIMEOUT_MS)
-			r.rtmp.Protocol().SetWriteTimeout(SRS_PAUSED_SEND_TIMEOUT_MS)
-
 			continue
 		}
 
@@ -196,10 +193,6 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		return
 	}
 	SrsTrace(r, r, "identify client success, type=%v, stream=%v", client_type, r.req.Stream)
-
-	// client is identified, set the timeout to service timeout.
-	r.rtmp.Protocol().SetReadTimeout(SRS_RECV_TIMEOUT_MS)
-	r.rtmp.Protocol().SetWriteTimeout(SRS_SEND_TIMEOUT_MS)
 
 	// set chunk size to larger.
 	// TODO: FIXME: implements it.
@@ -282,9 +275,6 @@ func (r *SrsClient) do_pprof() (err error) {
 		pprof.StopCPUProfile()
 	}(r, r)
 
-	r.rtmp.Protocol().SetReadTimeout(SRS_PPROF_TIMEOUT_MS)
-	r.rtmp.Protocol().SetWriteTimeout(SRS_PPROF_TIMEOUT_MS)
-
 	for {
 		// Ping
 		if err = r.rtmp.Ping(uint32(time.Now().Unix())); err != nil {
@@ -326,35 +316,25 @@ func (r *SrsClient) playing(source *SrsSource) (err error) {
 
 	r.consumer = source.CreateConsumer()
 
-	r.rtmp.Protocol().SetReadTimeout(SRS_PULSE_TIMEOUT_MS)
-
 	// SrsPithyPrint
 	// TODO: FIXME: implements it.
 
+	msg_input_channel := r.rtmp.Protocol().MessageInputChannel()
+	msg_send_channel := r.consumer.Messages()
+
 	for {
-		// read from client.
-		var msg *rtmp.Message
-		if msg, err = r.rtmp.Protocol().RecvMessage(); err != nil {
-			// if not tiemout error, return
-			if neterr, ok := err.(net.Error); !ok || !neterr.Timeout() {
+		select {
+		case msg, ok := <- msg_input_channel:
+			if !ok {
 				return
 			}
-			// ignore the timeout error
-			err = nil
-		}
-
-		if err = r.process_play_control_msg(msg); err != nil {
-			return
-		}
-
-		// get messages from consumer.
-		msgs := r.consumer.Messages()
-		for i := 0; i < len(msgs); i++ {
-			msg := msgs[i]
-			if msg == nil {
-				break
+			if err = r.process_play_control_msg(msg); err != nil {
+				return
 			}
-			// sendout messages
+		case msg, ok := <- msg_send_channel:
+			if !ok {
+				return
+			}
 			if err = r.rtmp.Protocol().SendMessage(msg, r.res.stream_id); err != nil {
 				return
 			}

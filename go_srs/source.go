@@ -119,29 +119,21 @@ func (r *SrsSource) OnVideo(msg *rtmp.Message) (err error) {
 */
 type SrsConsumer struct {
 	source *SrsSource
-	msgs []*rtmp.Message
+	msgs chan *rtmp.Message
 	elem *list.Element
-	msgs_lock *sync.Mutex
 }
 func NewSrsConsumer(source *SrsSource) (*SrsConsumer) {
 	r := &SrsConsumer{}
 	r.source = source
 	// TODO: FIXME: use buffered channel
-	r.msgs = make([]*rtmp.Message, 0)
-	r.msgs_lock = &sync.Mutex{}
+	r.msgs = make(chan *rtmp.Message, 1000)
 	return r
 }
-func (r *SrsConsumer) Messages() ([]*rtmp.Message) {
-	r.msgs_lock.Lock()
-	defer r.msgs_lock.Unlock()
-	msgs := r.msgs
-	r.msgs = make([]*rtmp.Message, 0)
-	return msgs
+func (r *SrsConsumer) Messages() (chan *rtmp.Message) {
+	return r.msgs
 }
 func (r *SrsConsumer) OnMessage(msg *rtmp.Message, tba int, tbv int) (err error) {
-	r.msgs_lock.Lock()
-	defer r.msgs_lock.Unlock()
-	r.msgs = append(r.msgs, msg)
+	r.msgs <- msg
 	return
 }
 /**
@@ -150,5 +142,6 @@ func (r *SrsConsumer) OnMessage(msg *rtmp.Message, tba int, tbv int) (err error)
 func (r *SrsConsumer) Close() (err error) {
 	r.source.RemoveConsumer(r)
 	r.source = nil
+	close(r.msgs)
 	return
 }
