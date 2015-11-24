@@ -19,13 +19,6 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-package main
+package rtmp
 
-//import "runtime"
-
-func main() {
-	//runtime.GOMAXPROCS(2)
-	r := NewSrsServer()
-	r.PrintInfo()
-	r.Serve()
-}
+var Version = "1.0.4"
