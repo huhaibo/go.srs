@@ -31,10 +31,10 @@ var (
 )
 
 type Sourcer struct {
-	msgs      *list.List
-	flvHead   []byte
-	metaHead  *msg
-	preTagLen uint32
+	msgs     *list.List
+	flvHead  []byte
+	metaHead *msg
+	// preTagLen uint32
 	// for gc
 	sync.RWMutex
 	cond *sync.Cond
@@ -94,8 +94,6 @@ func (s *Sourcer) Close() error {
 func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 	m := new(msg)
 	m.Message = *message
-	m.preLength = s.preTagLen
-	s.preTagLen = message.Header.PayloadLength
 
 	// add message to the end of msgs list.
 	s.msgs.PushBack(m)
@@ -115,7 +113,6 @@ func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 		for p := s.msgs.Front(); p != nil || s.cachedLength < (DefaultCacheMaxLength*0.7); p = p.Next() {
 			s.cachedLength -= uint64(p.Value.(*msg).Header.PayloadLength)
 		}
-		s.msgs.Front().Value.(*msg).preLength = 0
 		s.Unlock()
 	}
 
@@ -127,7 +124,7 @@ func (s *Sourcer) Live(w io.Writer) error {
 	if _, err := w.Write(s.flvHead); err != nil {
 		return err
 	}
-	metaHead, ok := s.metaHead.getFlvTagHead(0)
+	metaHead, ok := s.metaHead.getFlvTagHead(0, 0)
 	if !ok {
 		return errors.New("can't get flv meta data.")
 	}
@@ -140,7 +137,8 @@ func (s *Sourcer) Live(w io.Writer) error {
 	var (
 		startTime uint64
 		node      *list.Element
-		isFirst   = true
+		isFirst          = true
+		preLength uint32 = s.metaHead.Header.PayloadLength
 	)
 
 	for {
@@ -184,8 +182,9 @@ func (s *Sourcer) Live(w io.Writer) error {
 			s.RUnlock()
 		}
 		m := node.Value.(*msg)
-		tagHead, ok := m.getFlvTagHead(startTime)
+		tagHead, ok := m.getFlvTagHead(startTime, preLength)
 		if ok {
+			preLength = m.Header.PayloadLength
 			if _, err := w.Write(tagHead); err != nil {
 				return err
 			}
@@ -207,8 +206,7 @@ func (s *Sourcer) Live(w io.Writer) error {
 
 type msg struct {
 	rtmp.Message
-	preLength uint32
-	refer     int
+	refer int
 }
 
 func newMsg(m *rtmp.Message) *msg {
@@ -217,9 +215,9 @@ func newMsg(m *rtmp.Message) *msg {
 	return ms
 }
 
-func (m *msg) getFlvTagHead(startTime uint64) ([]byte, bool) {
+func (m *msg) getFlvTagHead(startTime uint64, preLength uint32) ([]byte, bool) {
 	b := make([]byte, 0, 15)
-	b = append(b, uint32ToBytes(m.preLength)...)
+	b = append(b, uint32ToBytes(preLength)...)
 	b = append(b, m.Header.MessageType)
 	b = append(b, uint32ToBytes(m.Header.PayloadLength)[1:]...)
 
