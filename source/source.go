@@ -68,9 +68,11 @@ func (sm *sourceManage) Delete(key string) {
 }
 
 type Sourcer struct {
-	msgs     *list.List
-	flvHead  []byte
-	metaHead *msg
+	msgs      *list.List
+	flvHead   []byte
+	metaHead  *msg
+	audioMeta *msg
+	videoMeta *msg
 	// preTagLen uint32
 	// for gc
 	sync.RWMutex
@@ -81,7 +83,8 @@ type Sourcer struct {
 	cachedLength uint64
 	key          string
 
-	isClosed bool
+	isClosed  bool
+	isRunning bool
 }
 
 // New->Flv head -> Meta head-> transport -> Close.
@@ -115,9 +118,23 @@ func (s *Sourcer) SetMeta(message *rtmp.Message) error {
 	}
 }
 
+func (s *Sourcer) SetAudioMeta(m *rtmp.Message) {
+	s.audioMeta = newMsg(m)
+}
+
+func (s *Sourcer) SetVideoMeta(m *rtmp.Message) {
+	s.videoMeta = newMsg(m)
+}
+
 func (s *Sourcer) SetFlvHead() {
 	// default.
 	s.flvHead = flvHeadBoth
+}
+
+func (s *Sourcer) Run() {
+	s.Lock()
+	s.isRunning = true
+	s.Unlock()
 }
 
 func (s *Sourcer) Close() error {
@@ -134,9 +151,7 @@ func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 
 	// add message to the end of msgs list.
 	s.msgs.PushBack(m)
-	s.RLock()
 	n := atomic.AddUint32(&s.HangWait, 0)
-	s.RUnlock()
 	if n > 0 {
 		atomic.AddUint32(&s.HangWait, -n)
 		// some was hang.
@@ -156,24 +171,59 @@ func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 		}
 		s.Unlock()
 	}
-	// println(float64(s.cachedLength) / 1024 / 1024)
 }
 
+var notGetMeta = errors.New("can't get flv meta data")
+var notRun = errors.New("source not running")
+
 // If close,unless not return.
+// TODO: add time meta.
 // TODO: ctrl the transport speed.
 func (s *Sourcer) Live(w io.Writer) error {
+	s.RLock()
+	if !s.isRunning {
+		s.RUnlock()
+		return notRun
+	}
+	s.RUnlock()
 	if _, err := w.Write(s.flvHead); err != nil {
 		return err
 	}
 	metaHead, ok := s.metaHead.getFlvTagHead(0, 0)
 	if !ok {
-		return errors.New("can't get flv meta data.")
+		return notGetMeta
 	}
 	if _, err := w.Write(metaHead); err != nil {
 		return err
 	}
 	if _, err := w.Write(s.metaHead.Payload); err != nil {
 		return err
+	}
+	if s.audioMeta != nil {
+		println("trace: add audio meta")
+		audioHead, ok := s.audioMeta.getFlvTagHead(0, 0)
+		if !ok {
+			return notGetMeta
+		}
+		if _, err := w.Write(audioHead); err != nil {
+			return err
+		}
+		if _, err := w.Write(s.audioMeta.Payload); err != nil {
+			return err
+		}
+	}
+	if s.videoMeta != nil {
+		println("trace: add video meta")
+		videoHead, ok := s.videoMeta.getFlvTagHead(0, 0)
+		if !ok {
+			return notGetMeta
+		}
+		if _, err := w.Write(videoHead); err != nil {
+			return err
+		}
+		if _, err := w.Write(s.videoMeta.Payload); err != nil {
+			return err
+		}
 	}
 	var (
 		startTime uint64
@@ -186,16 +236,15 @@ func (s *Sourcer) Live(w io.Writer) error {
 		// check isClosed.
 		s.RLock()
 		if s.isClosed {
-			s.RLock()
-			println("is close, read return.")
+			s.RUnlock()
 			return nil
 		}
 		if node == nil {
 			// get new node.
 			n := s.msgs.Len()
 			if n == 0 {
+				s.RUnlock()
 				atomic.AddUint32(&s.HangWait, 1)
-				s.Unlock()
 				s.cond.L.Lock()
 				s.cond.Wait()
 				s.cond.L.Unlock()
@@ -205,23 +254,24 @@ func (s *Sourcer) Live(w io.Writer) error {
 			if n == 0 {
 				n = 1
 			}
-			node = s.msgs.Front()
-			if n == 1 {
-				s.RUnlock()
-				continue
-			}
-			for i := 1; i < n; i++ {
-				node = node.Next()
-			}
-			s.RUnlock()
-		} else {
 			// get startTime && node
 			if isFirst {
+				node = s.msgs.Front()
+				if n != 1 {
+					for i := 1; i < n; i++ {
+						// should start with video.
+						node = node.Next()
+					}
+				}
 				startTime = node.Value.(*msg).Header.Timestamp
 				isFirst = false
+			} else {
+				node = s.msgs.Back()
 			}
-			s.RUnlock()
+
 		}
+		s.RUnlock()
+
 		m := node.Value.(*msg)
 		tagHead, ok := m.getFlvTagHead(startTime, preLength)
 		if ok {

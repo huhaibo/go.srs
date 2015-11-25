@@ -3,7 +3,9 @@ package main
 import (
 	"io"
 	"net"
+	"os"
 	"runtime"
+	"time"
 
 	"github.com/Alienero/IamServer/rtmp"
 	"github.com/Alienero/IamServer/source"
@@ -27,12 +29,11 @@ func NewSrsResponse() *SrsResponse {
 
 // the client provides the main logic control for RTMP clients.
 type SrsClient struct {
-	conn     *net.TCPConn
-	rtmp     rtmp.Server
-	req      *rtmp.Request
-	res      *SrsResponse
-	consumer *SrsConsumer
-	id       uint64
+	conn *net.TCPConn
+	rtmp rtmp.Server
+	req  *rtmp.Request
+	res  *SrsResponse
+	id   uint64
 }
 
 func NewSrsClient(conn *net.TCPConn) (r *SrsClient, err error) {
@@ -226,7 +227,10 @@ func (r *SrsClient) fmle_publishing(s *source.Sourcer) (err error) {
 
 	// notify the hls to prepare when publish start.
 	// TODO: FIXME: implements it.
-
+	hasAudioMeta := false
+	hasVideoMeta := false
+	isPass := false
+	n := 1
 	for {
 		// read from client.
 		var msg *rtmp.Message
@@ -252,9 +256,35 @@ func (r *SrsClient) fmle_publishing(s *source.Sourcer) (err error) {
 				return
 			}
 			glog.Info("set meta data done.")
+			// TODO remove:
+			go f(s)
+			go f1(s)
 			continue
 		}
-
+		if !isPass {
+			if n > 2 {
+				isPass = true
+			} else if msg.Header.IsAudio() && !hasAudioMeta {
+				glog.Info("get audio meta data.")
+				hasAudioMeta = true
+				s.SetAudioMeta(msg)
+				continue
+			} else if msg.Header.IsVideo() && !hasVideoMeta {
+				glog.Info("get audio meta data.")
+				hasVideoMeta = true
+				s.SetVideoMeta(msg)
+				continue
+			} else {
+				// pass, not match.
+			}
+			if hasAudioMeta && hasVideoMeta {
+				isPass = true
+			}
+			n++
+		} else {
+			// ok. norlmal play.
+			s.Run()
+		}
 		if err = r.process_publish_message(s, msg); err != nil {
 			return
 		}
@@ -267,4 +297,22 @@ func (r *SrsClient) process_publish_message(s *source.Sourcer, msg *rtmp.Message
 	s.HandleMsg(msg)
 	// glog.Info("handle msg done")
 	return
+}
+
+func f(s *source.Sourcer) {
+	time.Sleep(15 * time.Second)
+	f, _ := os.Create("f.flv")
+	defer func() { println("live closed!!!!!!!!!!") }()
+	if err := s.Live(f); err != nil {
+		println("live get an error", err.Error())
+	}
+}
+
+func f1(s *source.Sourcer) {
+	time.Sleep(3 * time.Second)
+	f, _ := os.Create("f1.flv")
+	defer func() { println("live closed!!!!!!!!!!") }()
+	if err := s.Live(f); err != nil {
+		println("live get an error", err.Error())
+	}
 }

@@ -12,7 +12,7 @@ import (
 
 func main() {
 	l := 0
-	f, err := os.Open("/Users/luyiyan/Desktop/418525riqnlZAhws.flv.crdownload.flv")
+	f, err := os.Open("//Users/luyiyan/Projects/rtmp/bin/f.flv")
 	if err != nil {
 		panic(err)
 	}
@@ -71,7 +71,7 @@ loop:
 		fmt.Println("meta:!!", v)
 	}
 	l++
-	if l > 1000 {
+	if l > 10 {
 		os.Exit(0)
 	}
 	goto loop
