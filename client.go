@@ -1,63 +1,15 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
 	"io"
 	"net"
-	"os"
 	"runtime"
 
 	"github.com/Alienero/IamServer/rtmp"
+	"github.com/Alienero/IamServer/source"
 
 	"github.com/golang/glog"
-	// "github.com/hongruiqi/amf.go/amf0"
-	"github.com/elobuff/goamf"
 )
-
-var flvHeadAudio = []byte{'F', 'L', 'V', 0x01,
-	0x04,
-	0x00, 0x00, 0x00, 0x09}
-var flvHeadVideo = []byte{'F', 'L', 'V', 0x01,
-	0x01,
-	0x00, 0x00, 0x00, 0x09}
-var flvHeadBoth = []byte{'F', 'L', 'V', 0x01,
-	0x05,
-	0x00, 0x00, 0x00, 0x09}
-
-var meta = []byte{0, 0, 0, 0, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-
-func getTagLen(l int) []byte {
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, uint32(l))
-	return b
-}
-
-const (
-	video  = 0x9
-	audio  = 0x8
-	script = 0x12
-)
-
-// typ: 0x8 audio,0x9 vide, 0x12 script
-func getTag(preLen int, typ byte, length int, timesteamp uint64) []byte {
-	b := make([]byte, 0, 15)
-	b = append(b, getTagLen(preLen)...)
-	b = append(b, typ)
-	b = append(b, getTagLen(length)[1:]...)
-	var t []byte
-
-	// if preLen == 0 {
-	// t = getTagLen(0)
-	// } else {
-	t = getTagLen(int(timesteamp))
-	// }
-	b = append(b, t[1:]...)
-	b = append(b, t[0])
-	// b = append(b, 0)
-	return append(b, []byte{0, 0, 0}...)
-}
 
 // default stream id for response the createStream request.
 const SRS_DEFAULT_SID = 1
@@ -81,10 +33,6 @@ type SrsClient struct {
 	res      *SrsResponse
 	consumer *SrsConsumer
 	id       uint64
-
-	// The flv file.
-	file         *os.File
-	preTagLength int
 }
 
 func NewSrsClient(conn *net.TCPConn) (r *SrsClient, err error) {
@@ -97,9 +45,6 @@ func NewSrsClient(conn *net.TCPConn) (r *SrsClient, err error) {
 		return
 	}
 	r.req = rtmp.NewRequest()
-	r.file, _ = os.Create("f.flv")
-	r.file.Write(flvHeadBoth)
-	r.file.Write(meta)
 	return
 }
 
@@ -228,8 +173,19 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 	// set chunk size to larger.
 	// TODO: FIXME: implements it.
 
-	// find a source to serve.
-	source := FindSrsSource(r.req)
+	// set a source to serve.
+	key := "/" + r.req.App + "/" + r.req.Stream
+	s, err := source.Sources.Set(key)
+	if err != nil {
+		return err
+	}
+	s.SetFlvHead()
+	defer func() {
+		source.Sources.Delete(key)
+		s.Close()
+		glog.Info("free sources.")
+	}()
+
 	glog.Infof("discovery source by url %v", r.req.StreamUrl())
 
 	// check publish available.
@@ -237,11 +193,6 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 
 	// enable gop cache if requires
 	// TODO: FIXME: implements it.
-
-	// when play, start pprof when vhost is pprof, and stop when client disconnect
-	// if client_type == rtmp.CLIENT_TYPE_Play && r.req.Vhost == SRS_PPROF_VHOST {
-	// 	return r.do_pprof()
-	// }
 
 	switch client_type {
 	case rtmp.CLIENT_TYPE_Play:
@@ -256,7 +207,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 		// on_publish
 		// TODO: FIXME: implements it.
 
-		err = r.fmle_publishing(source)
+		err = r.fmle_publishing(s)
 
 		// on_unpublish
 		// TODO: FIXME: implements it.
@@ -269,7 +220,7 @@ func (r *SrsClient) stream_service_cycle() (err error) {
 	return
 }
 
-func (r *SrsClient) fmle_publishing(source *SrsSource) (err error) {
+func (r *SrsClient) fmle_publishing(s *source.Sourcer) (err error) {
 	// refer check
 	// TODO: FIXME: implements it.
 
@@ -293,74 +244,27 @@ func (r *SrsClient) fmle_publishing(source *SrsSource) (err error) {
 				glog.Info("FMLE publish finished.")
 				return
 			}
-			glog.Info("Amf0 command.")
+			continue
+		}
+		if msg.Header.Timestamp == 0 && msg.Header.IsAmf0Data() {
+			glog.Info("set meta data")
+			if err = s.SetMeta(msg); err != nil {
+				return
+			}
+			glog.Info("set meta data done.")
 			continue
 		}
 
-		if err = r.process_publish_message(source, msg); err != nil {
+		if err = r.process_publish_message(s, msg); err != nil {
 			return
 		}
 	}
 	return
 }
 
-func (r *SrsClient) process_publish_message(source *SrsSource, msg *rtmp.Message) (err error) {
-	// if msg.Header.IsAmf0Command() && msg.Header.Timestamp == 0 {
-	// }
-	if msg.Header.IsAmf0Data() {
-		glog.Info(msg.Header.MessageType, msg.Header.IsAmf0Data(), msg.Header.PayloadLength)
-		// if _, err := r.file.Write(append(getTag(r.preTagLength, audio, int(msg.Header.PayloadLength), msg.Header.Timestamp), msg.Payload...)); err != nil {
-		// }
-		decoder := amf.NewDecoder()
-		reader := bytes.NewReader(msg.Payload)
-		l := reader.Len()
-		for {
-			fmt.Println("len:", reader.Len())
-			v, err := decoder.DecodeAmf0(reader)
-			if err != nil {
-				if err != io.EOF {
-					glog.Info("Decode get an error:", err)
-				}
-				break
-			}
-			if s := v.(string); s != "@setDataFrame" {
-				meta := msg.Payload[int(msg.Header.PayloadLength)-l:]
-				glog.Info("meta's length:", len(meta))
-				r.file.Write(append(getTag(r.preTagLength, script, len(meta), msg.Header.Timestamp), meta...))
-				break
-			}
-			if vv, ok := v.(amf.Object); ok {
-				fmt.Println(vv)
-				// get AMF0 code.
-				fmt.Println("get encode", len(msg.Payload[int(msg.Header.PayloadLength)-l:]))
-				// meta := msg.Payload[int(msg.Header.PayloadLength)-l:]
-				// r.file.Write(append(getTag(r.preTagLength, script, int(msg.Header.PayloadLength), msg.Header.Timestamp), meta...))
-			} else {
-				fmt.Println(v.(string))
-			}
-			l = reader.Len()
-		}
-		// fmt.Println("v is :", v)
-		// return nil
-	} else if msg.Header.IsAudio() {
-
-		if _, err := r.file.Write(append(getTag(r.preTagLength, audio, int(msg.Header.PayloadLength), msg.Header.Timestamp), msg.Payload...)); err != nil {
-			panic(err)
-		} else {
-			// log.Println("Write:", n)
-		}
-
-	} else if msg.Header.IsVideo() {
-		if _, err := r.file.Write(append(getTag(r.preTagLength, video, int(msg.Header.PayloadLength), msg.Header.Timestamp), msg.Payload...)); err != nil {
-			panic(err)
-		} else {
-			// log.Println("Write:", n)
-		}
-
-	}
-	r.preTagLength = int(msg.Header.PayloadLength)
-
-	// process onMetaData
-	// TODO: FIXME: implements it.
+func (r *SrsClient) process_publish_message(s *source.Sourcer, msg *rtmp.Message) (err error) {
+	// glog.Info("handle msg")
+	s.HandleMsg(msg)
+	// glog.Info("handle msg done")
 	return
 }

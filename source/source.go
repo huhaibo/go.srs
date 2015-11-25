@@ -14,7 +14,7 @@ import (
 	"github.com/elobuff/goamf"
 )
 
-const DefaultCacheMaxLength = 1024 * 1024 * 500
+const DefaultCacheMaxLength = 1024 * 1024 * 1
 
 var (
 	flvHeadAudio = []byte{'F', 'L', 'V', 0x01,
@@ -30,6 +30,43 @@ var (
 		0x00, 0x00, 0x00, 0x09}
 )
 
+type sourceManage struct {
+	dict map[string]*Sourcer
+	sync.RWMutex
+}
+
+var (
+	sourExist = errors.New("source exits.")
+	Sources   = &sourceManage{
+		dict: make(map[string]*Sourcer),
+	}
+)
+
+func (sm *sourceManage) Set(key string) (*Sourcer, error) {
+	sm.Lock()
+	defer sm.Unlock()
+	_, ok := sm.dict[key]
+	if ok {
+		return nil, sourExist
+	}
+	s := NewSourcer(key)
+	sm.dict[key] = s
+	return s, nil
+}
+
+func (sm *sourceManage) Get(key string) (*Sourcer, bool) {
+	sm.RLock()
+	defer sm.RUnlock()
+	s, ok := sm.dict[key]
+	return s, ok
+}
+
+func (sm *sourceManage) Delete(key string) {
+	sm.Lock()
+	delete(sm.dict, key)
+	sm.Unlock()
+}
+
 type Sourcer struct {
 	msgs     *list.List
 	flvHead  []byte
@@ -42,17 +79,17 @@ type Sourcer struct {
 	HangWait uint32
 	// total cached time.
 	cachedLength uint64
-	// head time index.
-	// headTime uint64
+	key          string
 
 	isClosed bool
 }
 
 // New->Flv head -> Meta head-> transport -> Close.
-func NewSourcer() *Sourcer {
+func NewSourcer(key string) *Sourcer {
 	return &Sourcer{
 		msgs: list.New(),
 		cond: sync.NewCond(new(sync.Mutex)),
+		key:  key,
 	}
 }
 
@@ -99,23 +136,27 @@ func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 	s.msgs.PushBack(m)
 	s.RLock()
 	n := atomic.AddUint32(&s.HangWait, 0)
-	s.Unlock()
+	s.RUnlock()
 	if n > 0 {
 		atomic.AddUint32(&s.HangWait, -n)
 		// some was hang.
 		s.cond.Broadcast()
 	}
-
 	// check gc.
 	s.cachedLength += uint64(m.Header.PayloadLength)
 	if s.cachedLength > DefaultCacheMaxLength {
 		s.Lock()
-		for p := s.msgs.Front(); p != nil || s.cachedLength < (DefaultCacheMaxLength*0.7); p = p.Next() {
-			s.cachedLength -= uint64(p.Value.(*msg).Header.PayloadLength)
+		p := s.msgs.Front()
+		i := DefaultCacheMaxLength * 0.7
+		for p != nil && s.cachedLength > uint64(i) {
+			temp := p
+			p = p.Next()
+			s.msgs.Remove(temp)
+			s.cachedLength -= uint64(temp.Value.(*msg).Header.PayloadLength)
 		}
 		s.Unlock()
 	}
-
+	// println(float64(s.cachedLength) / 1024 / 1024)
 }
 
 // If close,unless not return.
