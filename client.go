@@ -306,7 +306,6 @@ func (r *SrsClient) fmle_publishing(source *SrsSource) (err error) {
 
 func (r *SrsClient) process_publish_message(source *SrsSource, msg *rtmp.Message) (err error) {
 	// if msg.Header.IsAmf0Command() && msg.Header.Timestamp == 0 {
-
 	// }
 	if msg.Header.IsAmf0Data() {
 		glog.Info(msg.Header.MessageType, msg.Header.IsAmf0Data(), msg.Header.PayloadLength)
@@ -327,7 +326,7 @@ func (r *SrsClient) process_publish_message(source *SrsSource, msg *rtmp.Message
 			if s := v.(string); s != "@setDataFrame" {
 				meta := msg.Payload[int(msg.Header.PayloadLength)-l:]
 				glog.Info("meta's length:", len(meta))
-				r.file.Write(append(getTag(0, 18, len(meta), msg.Header.Timestamp), meta...))
+				r.file.Write(append(getTag(r.preTagLength, script, len(meta), msg.Header.Timestamp), meta...))
 				break
 			}
 			if vv, ok := v.(amf.Object); ok {

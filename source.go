@@ -35,7 +35,8 @@ type SrsSource struct {
 * @remark stream_url should without port and schema.
  */
 func FindSrsSource(req *rtmp.Request) *SrsSource {
-	stream_url := req.StreamUrl()
+	stream_url := "/" + req.App + "/" + req.Stream
+
 	if _, ok := source_pool[stream_url]; !ok {
 		r := &SrsSource{}
 		r.req = req
