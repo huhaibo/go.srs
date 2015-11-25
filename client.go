@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -10,6 +12,8 @@ import (
 	"github.com/Alienero/IamServer/rtmp"
 
 	"github.com/golang/glog"
+	// "github.com/hongruiqi/amf.go/amf0"
+	"github.com/elobuff/goamf"
 )
 
 var flvHeadAudio = []byte{'F', 'L', 'V', 0x01,
@@ -31,8 +35,9 @@ func getTagLen(l int) []byte {
 }
 
 const (
-	video = 0x9
-	audio = 0x8
+	video  = 0x9
+	audio  = 0x8
+	script = 0x12
 )
 
 // typ: 0x8 audio,0x9 vide, 0x12 script
@@ -43,11 +48,11 @@ func getTag(preLen int, typ byte, length int, timesteamp uint64) []byte {
 	b = append(b, getTagLen(length)[1:]...)
 	var t []byte
 
-	if preLen == 0 {
-		t = getTagLen(0)
-	} else {
-		t = getTagLen(int(timesteamp))
-	}
+	// if preLen == 0 {
+	// t = getTagLen(0)
+	// } else {
+	t = getTagLen(int(timesteamp))
+	// }
 	b = append(b, t[1:]...)
 	b = append(b, t[0])
 	// b = append(b, 0)
@@ -114,6 +119,7 @@ func (r *SrsClient) do_cycle() (err error) {
 
 		// ignore the normally closed
 		if err == nil {
+			glog.Info("OK client close.")
 			return
 		}
 		glog.Errorf("client cycle completed, err=%v", err)
@@ -276,7 +282,6 @@ func (r *SrsClient) fmle_publishing(source *SrsSource) (err error) {
 		if msg, err = r.rtmp.Protocol().RecvMessage(); err != nil {
 			return
 		}
-
 		// process UnPublish event.
 		if msg.Header.IsAmf0Command() || msg.Header.IsAmf3Command() {
 			var pkt interface{}
@@ -288,6 +293,7 @@ func (r *SrsClient) fmle_publishing(source *SrsSource) (err error) {
 				glog.Info("FMLE publish finished.")
 				return
 			}
+			glog.Info("Amf0 command.")
 			continue
 		}
 
@@ -299,34 +305,60 @@ func (r *SrsClient) fmle_publishing(source *SrsSource) (err error) {
 }
 
 func (r *SrsClient) process_publish_message(source *SrsSource, msg *rtmp.Message) (err error) {
-	// r.file.Write(msg.Payload)
-	// glog.Info("msg len:", len(msg.Payload), "audio:", msg.Header.IsAudio())
-	// log.Println(msg.Header.TimestampDelta,msg.Header)
-	// process audio packet
-	if msg.Header.IsAudio() {
-		// log.Println(1)
+	// if msg.Header.IsAmf0Command() && msg.Header.Timestamp == 0 {
+
+	// }
+	if msg.Header.IsAmf0Data() {
+		glog.Info(msg.Header.MessageType, msg.Header.IsAmf0Data(), msg.Header.PayloadLength)
+		// if _, err := r.file.Write(append(getTag(r.preTagLength, audio, int(msg.Header.PayloadLength), msg.Header.Timestamp), msg.Payload...)); err != nil {
+		// }
+		decoder := amf.NewDecoder()
+		reader := bytes.NewReader(msg.Payload)
+		l := reader.Len()
+		for {
+			fmt.Println("len:", reader.Len())
+			v, err := decoder.DecodeAmf0(reader)
+			if err != nil {
+				if err != io.EOF {
+					glog.Info("Decode get an error:", err)
+				}
+				break
+			}
+			if s := v.(string); s != "@setDataFrame" {
+				meta := msg.Payload[int(msg.Header.PayloadLength)-l:]
+				glog.Info("meta's length:", len(meta))
+				r.file.Write(append(getTag(0, 18, len(meta), msg.Header.Timestamp), meta...))
+				break
+			}
+			if vv, ok := v.(amf.Object); ok {
+				fmt.Println(vv)
+				// get AMF0 code.
+				fmt.Println("get encode", len(msg.Payload[int(msg.Header.PayloadLength)-l:]))
+				// meta := msg.Payload[int(msg.Header.PayloadLength)-l:]
+				// r.file.Write(append(getTag(r.preTagLength, script, int(msg.Header.PayloadLength), msg.Header.Timestamp), meta...))
+			} else {
+				fmt.Println(v.(string))
+			}
+			l = reader.Len()
+		}
+		// fmt.Println("v is :", v)
+		// return nil
+	} else if msg.Header.IsAudio() {
+
 		if _, err := r.file.Write(append(getTag(r.preTagLength, audio, int(msg.Header.PayloadLength), msg.Header.Timestamp), msg.Payload...)); err != nil {
 			panic(err)
 		} else {
 			// log.Println("Write:", n)
 		}
 
-		// log.Println(-1)
-	}
-
-	// process video packet
-	if msg.Header.IsVideo() {
-		// log.Println(2)
+	} else if msg.Header.IsVideo() {
 		if _, err := r.file.Write(append(getTag(r.preTagLength, video, int(msg.Header.PayloadLength), msg.Header.Timestamp), msg.Payload...)); err != nil {
 			panic(err)
 		} else {
 			// log.Println("Write:", n)
 		}
 
-		// log.Println(-2)
-
 	}
-	// r.file.Write(msg.Payload)
 	r.preTagLength = int(msg.Header.PayloadLength)
 
 	// process onMetaData
