@@ -78,7 +78,7 @@ type Sourcer struct {
 	sync.RWMutex
 	cond *sync.Cond
 	// number of goroutinue on hang stat.
-	HangWait uint32
+	HangWait int32
 	// total cached time.
 	cachedLength uint64
 	key          string
@@ -151,7 +151,7 @@ func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 
 	// add message to the end of msgs list.
 	s.msgs.PushBack(m)
-	n := atomic.AddUint32(&s.HangWait, 0)
+	n := atomic.AddInt32(&s.HangWait, 0)
 	if n > 0 {
 		// some was hang.
 		s.cond.Broadcast()
@@ -243,30 +243,21 @@ func (s *Sourcer) Live(w io.Writer) error {
 			n := s.msgs.Len()
 			if n == 0 {
 				s.RUnlock()
-				atomic.AddUint32(&s.HangWait, 1)
+				atomic.AddInt32(&s.HangWait, 1)
 				s.cond.L.Lock()
 				s.cond.Wait()
 				s.cond.L.Unlock()
-				atomic.AddUint32(&s.HangWait, -1)
+				atomic.AddInt32(&s.HangWait, -1)
 				continue
 			}
-			n = int(float64(n) * 0.6)
-			if n == 0 {
-				n = 1
-			}
 			// get startTime && node
+			node = s.msgs.Back()
+			if node == nil {
+				continue
+			}
 			if isFirst {
-				node = s.msgs.Front()
-				if n != 1 {
-					for i := 1; i < n; i++ {
-						// should start with video.
-						node = node.Next()
-					}
-				}
 				startTime = node.Value.(*msg).Header.Timestamp
 				isFirst = false
-			} else {
-				node = s.msgs.Back()
 			}
 
 		}
@@ -287,11 +278,11 @@ func (s *Sourcer) Live(w io.Writer) error {
 		node = node.Next()
 		s.RUnlock()
 		if node == nil {
-			atomic.AddUint32(&s.HangWait, 1)
+			atomic.AddInt32(&s.HangWait, 1)
 			s.cond.L.Lock()
 			s.cond.Wait()
 			s.cond.L.Unlock()
-			atomic.AddUint32(&s.HangWait, -1)
+			atomic.AddInt32(&s.HangWait, -1)
 		}
 	}
 }

@@ -19,7 +19,7 @@ func InitHTTP() error {
 		key := "/live/123" // for test.
 		s, ok := source.Sources.Get(key)
 		if !ok {
-			glog.Info("srouce not exist.")
+			glog.Info("source not exist.")
 			return
 		}
 		glog.Info("get source.")
@@ -29,7 +29,7 @@ func InitHTTP() error {
 		if err := s.Live(w); err != nil {
 			glog.Info("Live get an error", err)
 		}
-		r.Body.Close()
 	})
+	http.Handle("/", http.FileServer(http.Dir(".")))
 	return nil
 }
