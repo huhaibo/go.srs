@@ -14,7 +14,7 @@ import (
 	"github.com/elobuff/goamf"
 )
 
-const DefaultCacheMaxLength = 1024 * 1024 * 1
+const DefaultCacheMaxLength = 1024 * 1024 * 2
 
 var (
 	flvHeadAudio = []byte{'F', 'L', 'V', 0x01,
@@ -85,6 +85,8 @@ type Sourcer struct {
 
 	isClosed  bool
 	isRunning bool
+
+	hangLen int
 }
 
 // New->Flv head -> Meta head-> transport -> Close.
@@ -153,8 +155,12 @@ func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 	s.msgs.PushBack(m)
 	n := atomic.AddInt32(&s.HangWait, 0)
 	if n > 0 {
-		// some was hang.
-		s.cond.Broadcast()
+		s.hangLen++
+		if s.hangLen > 30 { // cache length.
+			// some was hang.
+			s.cond.Broadcast()
+			s.hangLen = 0
+		}
 	}
 	// check gc.
 	s.cachedLength += uint64(m.Header.PayloadLength)
@@ -250,14 +256,29 @@ func (s *Sourcer) Live(w io.Writer) error {
 				atomic.AddInt32(&s.HangWait, -1)
 				continue
 			}
-			// get startTime && node
-			node = s.msgs.Back()
-			if node == nil {
-				continue
+			n = int(float64(n) * 0.6)
+			if n == 0 {
+				n = 1
 			}
+			// get startTime && node
 			if isFirst {
+				node = s.msgs.Front()
+				if n != 1 {
+					for i := 1; i < n; i++ {
+						// should start with video.
+						node = node.Next()
+					}
+				}
+				if node == nil {
+					continue
+				}
 				startTime = node.Value.(*msg).Header.Timestamp
 				isFirst = false
+			} else {
+				node = s.msgs.Back()
+				if node == nil {
+					continue
+				}
 			}
 
 		}
@@ -278,6 +299,7 @@ func (s *Sourcer) Live(w io.Writer) error {
 		node = node.Next()
 		s.RUnlock()
 		if node == nil {
+			println("end")
 			atomic.AddInt32(&s.HangWait, 1)
 			s.cond.L.Lock()
 			s.cond.Wait()
