@@ -29,6 +29,7 @@ func InitHTTP() error {
 		if err := s.Live(w); err != nil {
 			glog.Info("Live get an error", err)
 		}
+		r.Body.Close()
 	})
 	return nil
 }

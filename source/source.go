@@ -153,7 +153,6 @@ func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 	s.msgs.PushBack(m)
 	n := atomic.AddUint32(&s.HangWait, 0)
 	if n > 0 {
-		atomic.AddUint32(&s.HangWait, -n)
 		// some was hang.
 		s.cond.Broadcast()
 	}
@@ -248,6 +247,7 @@ func (s *Sourcer) Live(w io.Writer) error {
 				s.cond.L.Lock()
 				s.cond.Wait()
 				s.cond.L.Unlock()
+				atomic.AddUint32(&s.HangWait, -1)
 				continue
 			}
 			n = int(float64(n) * 0.6)
@@ -291,6 +291,7 @@ func (s *Sourcer) Live(w io.Writer) error {
 			s.cond.L.Lock()
 			s.cond.Wait()
 			s.cond.L.Unlock()
+			atomic.AddUint32(&s.HangWait, -1)
 		}
 	}
 }
