@@ -256,9 +256,10 @@ func (r *SrsClient) fmle_publishing(s *source.Sourcer) (err error) {
 				return
 			}
 			glog.Info("set meta data done.")
-			// TODO remove:
-			go f(s)
-			go f1(s)
+			// TODO remove :
+			// for test.
+			// go f(s)
+			// go f1(s)
 			continue
 		}
 		if !isPass {
