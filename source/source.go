@@ -15,7 +15,7 @@ import (
 	"github.com/golang/glog"
 )
 
-const DefaultCacheMaxLength = 1024 * 1024 * 2
+const DefaultCacheMaxLength = 1024 * 1024 * 20
 
 var (
 	flvHeadAudio = []byte{'F', 'L', 'V', 0x01,
@@ -220,16 +220,20 @@ func (s *Sourcer) Live(w io.Writer) error {
 	var (
 		err    error
 		hasSeq uint64
+		ok     bool
+
+		// buf total tag's head.
+		buf = make([]byte, 15)
 	)
 
 	if _, err = w.Write(s.flvHead); err != nil {
 		return err
 	}
-	metaHead, ok := s.metaHead.getFlvTagHead(0, 0)
+	ok = s.metaHead.getFlvTagHead(0, 0, buf)
 	if !ok {
 		return notGetMeta
 	}
-	if _, err = w.Write(metaHead); err != nil {
+	if _, err = w.Write(buf); err != nil {
 		return err
 	}
 	if _, err = w.Write(s.metaHead.Payload); err != nil {
@@ -237,11 +241,11 @@ func (s *Sourcer) Live(w io.Writer) error {
 	}
 	if s.audioMeta != nil {
 		glog.Info("trace: add audio meta")
-		audioHead, ok := s.audioMeta.getFlvTagHead(0, 0)
+		ok = s.audioMeta.getFlvTagHead(0, 0, buf)
 		if !ok {
 			return notGetMeta
 		}
-		if _, err = w.Write(audioHead); err != nil {
+		if _, err = w.Write(buf); err != nil {
 			return err
 		}
 		if _, err = w.Write(s.audioMeta.Payload); err != nil {
@@ -250,11 +254,11 @@ func (s *Sourcer) Live(w io.Writer) error {
 	}
 	if s.videoMeta != nil {
 		glog.Info("trace: add video meta")
-		videoHead, ok := s.videoMeta.getFlvTagHead(0, 0)
+		ok = s.videoMeta.getFlvTagHead(0, 0, buf)
 		if !ok {
 			return notGetMeta
 		}
-		if _, err = w.Write(videoHead); err != nil {
+		if _, err = w.Write(buf); err != nil {
 			return err
 		}
 		if _, err = w.Write(s.videoMeta.Payload); err != nil {
@@ -293,10 +297,10 @@ func (s *Sourcer) Live(w io.Writer) error {
 
 		m := node.Value.(*msg)
 		hasSeq = m.seq
-		tagHead, ok := m.getFlvTagHead(startTime, preLength)
+		ok := m.getFlvTagHead(startTime, preLength, buf)
 		if ok {
 			preLength = m.Header.PayloadLength
-			if _, err = w.Write(tagHead); err != nil {
+			if _, err = w.Write(buf); err != nil {
 				return err
 			}
 			if _, err = w.Write(m.Payload); err != nil {
@@ -314,6 +318,13 @@ func (s *Sourcer) Live(w io.Writer) error {
 	}
 }
 
+// TODO: finish consumer. Imp it.
+type consumer struct {
+	src        *Sourcer
+	tagHeadBuf []byte
+	startTime  uint64
+}
+
 type msg struct {
 	rtmp.Message
 	refer int
@@ -326,26 +337,27 @@ func newMsg(m *rtmp.Message) *msg {
 	return ms
 }
 
-func (m *msg) getFlvTagHead(startTime uint64, preLength uint32) ([]byte, bool) {
-	b := make([]byte, 0, 15)
-	b = append(b, uint32ToBytes(preLength)...)
-	b = append(b, m.Header.MessageType)
-	b = append(b, uint32ToBytes(m.Header.PayloadLength)[1:]...)
+func (m *msg) getFlvTagHead(startTime uint64, preLength uint32, buf []byte) bool {
+	uint32ToBytes(preLength, buf[0:4])
+	buf[4] = m.Header.MessageType
+	temp := buf[5]
+	uint32ToBytes(m.Header.PayloadLength, buf[5:9])
+	buf[5] = temp
 
 	indexTime := m.Header.Timestamp - startTime
 	if indexTime < 0 {
-		return nil, false
+		return false
 	}
-	t := uint32ToBytes(uint32(indexTime))
+	uint32ToBytes(uint32(indexTime), buf[9:13])
+	high := buf[9]
+	buf[9] = buf[10]
+	buf[10] = buf[11]
+	buf[11] = buf[12]
+	buf[12] = high
 
-	b = append(b, t[1:]...)
-	b = append(b, t[0])
-
-	return append(b, []byte{0, 0, 0}...), true
+	return true
 }
 
-func uint32ToBytes(l uint32) []byte {
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, uint32(l))
-	return b
+func uint32ToBytes(l uint32, buf []byte) {
+	binary.BigEndian.PutUint32(buf, uint32(l))
 }
