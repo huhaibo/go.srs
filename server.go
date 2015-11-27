@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"runtime"
 
 	"github.com/Alienero/IamServer/rtmp"
 
@@ -21,6 +22,7 @@ func NewSrsServer() *SrsServer {
 
 func (r *SrsServer) PrintInfo() {
 	glog.Infof("RTMP Protocol Stack:  %v", rtmp.Version)
+	glog.Infof("Will use CPU Num:%v", runtime.NumCPU())
 }
 
 func (r *SrsServer) Serve() error {

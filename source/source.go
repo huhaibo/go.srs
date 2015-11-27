@@ -8,7 +8,6 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/Alienero/IamServer/rtmp"
 
@@ -78,7 +77,6 @@ type Sourcer struct {
 	// preTagLen uint32
 	// for gc
 	sync.RWMutex
-	cond *sync.Cond
 	// number of goroutinue on hang stat.
 	HangWait int32
 	// total cached time.
@@ -88,15 +86,16 @@ type Sourcer struct {
 	isClosed  bool
 	isRunning bool
 
-	seq uint64
+	seq        uint64
+	signalChan chan struct{}
 }
 
 // New->Flv head -> Meta head-> transport -> Close.
 func NewSourcer(key string) *Sourcer {
 	return &Sourcer{
-		msgs: list.New(),
-		cond: sync.NewCond(new(sync.Mutex)),
-		key:  key,
+		msgs:       list.New(),
+		key:        key,
+		signalChan: make(chan struct{}, 5000),
 	}
 }
 
@@ -145,21 +144,34 @@ func (s *Sourcer) Close() error {
 	s.Lock()
 	s.isClosed = true
 	s.Unlock()
-	s.cond.Broadcast()
+	s.wakeAll()
 	return nil
 }
 
+// only, server not closed.
+// before you should call s.RLock().
 func (s *Sourcer) wait() {
-	ch := make(chan struct{})
-	go func() {
-		s.cond.L.Lock()
-		s.cond.Wait()
-		s.cond.L.Unlock()
-		ch <- struct{}{}
-	}()
-	select {
-	case <-ch:
-	case <-time.After(time.Second):
+	isClosed := s.isClosed
+	if !isClosed {
+		atomic.AddInt32(&s.HangWait, 1)
+		s.RUnlock()
+		<-s.signalChan
+	} else {
+		s.RUnlock()
+	}
+}
+
+func (s *Sourcer) wakeAll() {
+	n := atomic.AddInt32(&s.HangWait, 0)
+	if n > 0 {
+		s.wakeImp(n)
+		atomic.AddInt32(&s.HangWait, -n)
+	}
+}
+
+func (s *Sourcer) wakeImp(n int32) {
+	for i := 0; i < int(n); i++ {
+		s.signalChan <- struct{}{}
 	}
 }
 
@@ -172,12 +184,9 @@ func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 	// add message to the end of msgs list.
 	s.msgs.PushBack(m)
 
-	n := atomic.AddInt32(&s.HangWait, 0)
-	if n > 0 {
-		atomic.AddInt32(&s.HangWait, -n)
-		// some was hang.
-		s.cond.Broadcast()
-	}
+	// wake up all waitter.
+	s.wakeAll()
+
 	// check gc.
 	s.cachedLength += uint64(m.Header.PayloadLength)
 	if s.cachedLength > DefaultCacheMaxLength {
@@ -270,9 +279,7 @@ func (s *Sourcer) Live(w io.Writer) error {
 		if node == nil {
 			// get new node.
 			if s.msgs.Len() == 0 || s.seq == hasSeq {
-				s.RUnlock()
-				atomic.AddInt32(&s.HangWait, 1)
-				s.wait()
+				s.wait() // it will call s.RUnlock().
 				continue
 			}
 			node = s.msgs.Back()
@@ -299,10 +306,10 @@ func (s *Sourcer) Live(w io.Writer) error {
 		// safe get node.
 		s.RLock()
 		node = node.Next()
-		s.RUnlock()
 		if node == nil {
-			atomic.AddInt32(&s.HangWait, 1)
-			s.wait()
+			s.wait() // it will call s.RUnlock().
+		} else {
+			s.RUnlock()
 		}
 	}
 }
