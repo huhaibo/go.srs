@@ -5,9 +5,7 @@ import (
 	"container/list"
 	"encoding/binary"
 	"errors"
-	"io"
 	"sync"
-	"sync/atomic"
 
 	"github.com/Alienero/IamServer/rtmp"
 
@@ -77,25 +75,20 @@ type Sourcer struct {
 	// preTagLen uint32
 	// for gc
 	sync.RWMutex
-	// number of goroutinue on hang stat.
-	HangWait int32
-	// total cached time.
-	cachedLength uint64
-	key          string
 
 	isClosed  bool
 	isRunning bool
 
-	seq        uint64
-	signalChan chan struct{}
+	seq uint64
+
+	consumers *list.List
 }
 
 // New->Flv head -> Meta head-> transport -> Close.
 func NewSourcer(key string) *Sourcer {
 	return &Sourcer{
-		msgs:       list.New(),
-		key:        key,
-		signalChan: make(chan struct{}, 5000),
+		msgs:      list.New(),
+		consumers: list.New(),
 	}
 }
 
@@ -143,35 +136,32 @@ func (s *Sourcer) Run() {
 func (s *Sourcer) Close() error {
 	s.Lock()
 	s.isClosed = true
+	s.delAllConsumer()
 	s.Unlock()
-	s.wakeAll()
 	return nil
 }
 
-// only, server not closed.
-// before you should call s.RLock().
-func (s *Sourcer) wait() {
-	isClosed := s.isClosed
-	if !isClosed {
-		atomic.AddInt32(&s.HangWait, 1)
-		s.RUnlock()
-		<-s.signalChan
-	} else {
-		s.RUnlock()
+func (s *Sourcer) addConsumer(c *Consumer) (*list.Element, error) {
+	s.Lock()
+	defer s.Unlock()
+	if s.isClosed {
+		return nil, errors.New("source is closed.")
 	}
+	return s.consumers.PushBack(c), nil
 }
 
-func (s *Sourcer) wakeAll() {
-	n := atomic.AddInt32(&s.HangWait, 0)
-	if n > 0 {
-		s.wakeImp(n)
-		atomic.AddInt32(&s.HangWait, -n)
-	}
+// Consumer call it.
+func (s *Sourcer) delConsumer(e *list.Element) {
+	s.Lock()
+	defer s.Unlock()
+	c := s.consumers.Remove(e).(*Consumer)
+	close(c.bufChan)
 }
 
-func (s *Sourcer) wakeImp(n int32) {
-	for i := 0; i < int(n); i++ {
-		s.signalChan <- struct{}{}
+// Only Sourcer's close method call it.
+func (s *Sourcer) delAllConsumer() {
+	for node := s.consumers.Front(); node != nil; node = node.Next() {
+		close(node.Value.(*Consumer).bufChan)
 	}
 }
 
@@ -179,151 +169,15 @@ func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 	m := new(msg)
 	m.Message = *message
 	s.seq++ // not need thread safe.
-	m.seq = s.seq
-
-	// add message to the end of msgs list.
-	s.msgs.PushBack(m)
-
-	// wake up all waitter.
-	s.wakeAll()
-
-	// check gc.
-	s.cachedLength += uint64(m.Header.PayloadLength)
-	if s.cachedLength > DefaultCacheMaxLength {
-		s.Lock()
-		p := s.msgs.Front()
-		i := DefaultCacheMaxLength * 0.7
-		for p != nil && s.cachedLength > uint64(i) {
-			temp := p
-			p = p.Next()
-			s.msgs.Remove(temp)
-			s.cachedLength -= uint64(temp.Value.(*msg).Header.PayloadLength)
-		}
-		s.Unlock()
+	s.RLock()
+	for node := s.consumers.Front(); node != nil; node = node.Next() {
+		node.Value.(*Consumer).addMsg(m)
 	}
+	s.RUnlock()
 }
 
 var notGetMeta = errors.New("can't get flv meta data")
 var notRun = errors.New("source not running")
-
-// If close,unless not return.
-// TODO: add time meta.
-// TODO: ctrl the transport speed.
-func (s *Sourcer) Live(w io.Writer) error {
-	s.RLock()
-	if !s.isRunning {
-		s.RUnlock()
-		return notRun
-	}
-	s.RUnlock()
-
-	var (
-		err    error
-		hasSeq uint64
-		ok     bool
-
-		// buf total tag's head.
-		buf = make([]byte, 15)
-	)
-
-	if _, err = w.Write(s.flvHead); err != nil {
-		return err
-	}
-	ok = s.metaHead.getFlvTagHead(0, 0, buf)
-	if !ok {
-		return notGetMeta
-	}
-	if _, err = w.Write(buf); err != nil {
-		return err
-	}
-	if _, err = w.Write(s.metaHead.Payload); err != nil {
-		return err
-	}
-	if s.audioMeta != nil {
-		glog.Info("trace: add audio meta")
-		ok = s.audioMeta.getFlvTagHead(0, 0, buf)
-		if !ok {
-			return notGetMeta
-		}
-		if _, err = w.Write(buf); err != nil {
-			return err
-		}
-		if _, err = w.Write(s.audioMeta.Payload); err != nil {
-			return err
-		}
-	}
-	if s.videoMeta != nil {
-		glog.Info("trace: add video meta")
-		ok = s.videoMeta.getFlvTagHead(0, 0, buf)
-		if !ok {
-			return notGetMeta
-		}
-		if _, err = w.Write(buf); err != nil {
-			return err
-		}
-		if _, err = w.Write(s.videoMeta.Payload); err != nil {
-			return err
-		}
-	}
-	var (
-		startTime uint64
-		node      *list.Element
-		isFirst          = true
-		preLength uint32 = s.metaHead.Header.PayloadLength
-	)
-
-	for {
-		// check isClosed.
-		s.RLock()
-		if s.isClosed {
-			s.RUnlock()
-			return nil
-		}
-		// there lock for safe to get node, without nil node.
-		if node == nil {
-			// get new node.
-			if s.msgs.Len() == 0 || s.seq == hasSeq {
-				s.wait() // it will call s.RUnlock().
-				continue
-			}
-			node = s.msgs.Back()
-			// get startTime && node
-			if isFirst {
-				startTime = node.Value.(*msg).Header.Timestamp
-				isFirst = false
-			}
-		}
-		s.RUnlock()
-
-		m := node.Value.(*msg)
-		hasSeq = m.seq
-		ok := m.getFlvTagHead(startTime, preLength, buf)
-		if ok {
-			preLength = m.Header.PayloadLength
-			if _, err = w.Write(buf); err != nil {
-				return err
-			}
-			if _, err = w.Write(m.Payload); err != nil {
-				return err
-			}
-		}
-		// safe get node.
-		s.RLock()
-		node = node.Next()
-		if node == nil {
-			s.wait() // it will call s.RUnlock().
-		} else {
-			s.RUnlock()
-		}
-	}
-}
-
-// TODO: finish consumer. Imp it.
-type consumer struct {
-	src        *Sourcer
-	tagHeadBuf []byte
-	startTime  uint64
-}
 
 type msg struct {
 	rtmp.Message

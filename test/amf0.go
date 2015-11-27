@@ -71,7 +71,7 @@ loop:
 		fmt.Println("meta:!!", v)
 	}
 	l++
-	if l > 10 {
+	if l > 100 {
 		os.Exit(0)
 	}
 	goto loop

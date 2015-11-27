@@ -3,9 +3,7 @@ package main
 import (
 	"io"
 	"net"
-	"os"
 	"runtime"
-	"time"
 
 	"github.com/Alienero/IamServer/rtmp"
 	"github.com/Alienero/IamServer/source"
@@ -298,22 +296,4 @@ func (r *SrsClient) process_publish_message(s *source.Sourcer, msg *rtmp.Message
 	s.HandleMsg(msg)
 	// glog.Info("handle msg done")
 	return
-}
-
-func f(s *source.Sourcer) {
-	time.Sleep(15 * time.Second)
-	f, _ := os.Create("f.flv")
-	defer func() { println("live closed!!!!!!!!!!") }()
-	if err := s.Live(f); err != nil {
-		println("live get an error", err.Error())
-	}
-}
-
-func f1(s *source.Sourcer) {
-	time.Sleep(3 * time.Second)
-	f, _ := os.Create("f1.flv")
-	defer func() { println("live closed!!!!!!!!!!") }()
-	if err := s.Live(f); err != nil {
-		println("live get an error", err.Error())
-	}
 }
