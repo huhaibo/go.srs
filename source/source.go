@@ -8,10 +8,12 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Alienero/IamServer/rtmp"
 
 	"github.com/elobuff/goamf"
+	"github.com/golang/glog"
 )
 
 const DefaultCacheMaxLength = 1024 * 1024 * 2
@@ -86,7 +88,7 @@ type Sourcer struct {
 	isClosed  bool
 	isRunning bool
 
-	hangLen int
+	seq uint64
 }
 
 // New->Flv head -> Meta head-> transport -> Close.
@@ -110,7 +112,7 @@ func (s *Sourcer) SetMeta(message *rtmp.Message) error {
 		}
 		if str := v.(string); str != "@setDataFrame" {
 			meta := message.Payload[int(message.Header.PayloadLength)-l:]
-			println("trace:get meta head.")
+			glog.Info("trace:get meta head.")
 			s.metaHead = newMsg(message)
 			s.metaHead.Payload = meta
 			s.metaHead.Header.PayloadLength = uint32(len(meta))
@@ -147,20 +149,34 @@ func (s *Sourcer) Close() error {
 	return nil
 }
 
+func (s *Sourcer) wait() {
+	ch := make(chan struct{})
+	go func() {
+		s.cond.L.Lock()
+		s.cond.Wait()
+		s.cond.L.Unlock()
+		ch <- struct{}{}
+	}()
+	select {
+	case <-ch:
+	case <-time.After(time.Second):
+	}
+}
+
 func (s *Sourcer) HandleMsg(message *rtmp.Message) {
 	m := new(msg)
 	m.Message = *message
+	s.seq++ // not need thread safe.
+	m.seq = s.seq
 
 	// add message to the end of msgs list.
 	s.msgs.PushBack(m)
+
 	n := atomic.AddInt32(&s.HangWait, 0)
 	if n > 0 {
-		s.hangLen++
-		if s.hangLen > 30 { // cache length.
-			// some was hang.
-			s.cond.Broadcast()
-			s.hangLen = 0
-		}
+		atomic.AddInt32(&s.HangWait, -n)
+		// some was hang.
+		s.cond.Broadcast()
 	}
 	// check gc.
 	s.cachedLength += uint64(m.Header.PayloadLength)
@@ -191,42 +207,48 @@ func (s *Sourcer) Live(w io.Writer) error {
 		return notRun
 	}
 	s.RUnlock()
-	if _, err := w.Write(s.flvHead); err != nil {
+
+	var (
+		err    error
+		hasSeq uint64
+	)
+
+	if _, err = w.Write(s.flvHead); err != nil {
 		return err
 	}
 	metaHead, ok := s.metaHead.getFlvTagHead(0, 0)
 	if !ok {
 		return notGetMeta
 	}
-	if _, err := w.Write(metaHead); err != nil {
+	if _, err = w.Write(metaHead); err != nil {
 		return err
 	}
-	if _, err := w.Write(s.metaHead.Payload); err != nil {
+	if _, err = w.Write(s.metaHead.Payload); err != nil {
 		return err
 	}
 	if s.audioMeta != nil {
-		println("trace: add audio meta")
+		glog.Info("trace: add audio meta")
 		audioHead, ok := s.audioMeta.getFlvTagHead(0, 0)
 		if !ok {
 			return notGetMeta
 		}
-		if _, err := w.Write(audioHead); err != nil {
+		if _, err = w.Write(audioHead); err != nil {
 			return err
 		}
-		if _, err := w.Write(s.audioMeta.Payload); err != nil {
+		if _, err = w.Write(s.audioMeta.Payload); err != nil {
 			return err
 		}
 	}
 	if s.videoMeta != nil {
-		println("trace: add video meta")
+		glog.Info("trace: add video meta")
 		videoHead, ok := s.videoMeta.getFlvTagHead(0, 0)
 		if !ok {
 			return notGetMeta
 		}
-		if _, err := w.Write(videoHead); err != nil {
+		if _, err = w.Write(videoHead); err != nil {
 			return err
 		}
-		if _, err := w.Write(s.videoMeta.Payload); err != nil {
+		if _, err = w.Write(s.videoMeta.Payload); err != nil {
 			return err
 		}
 	}
@@ -244,67 +266,43 @@ func (s *Sourcer) Live(w io.Writer) error {
 			s.RUnlock()
 			return nil
 		}
+		// there lock for safe to get node, without nil node.
 		if node == nil {
 			// get new node.
-			n := s.msgs.Len()
-			if n == 0 {
+			if s.msgs.Len() == 0 || s.seq == hasSeq {
 				s.RUnlock()
 				atomic.AddInt32(&s.HangWait, 1)
-				s.cond.L.Lock()
-				s.cond.Wait()
-				s.cond.L.Unlock()
-				atomic.AddInt32(&s.HangWait, -1)
+				s.wait()
 				continue
 			}
-			n = int(float64(n) * 0.6)
-			if n == 0 {
-				n = 1
-			}
+			node = s.msgs.Back()
 			// get startTime && node
 			if isFirst {
-				node = s.msgs.Front()
-				if n != 1 {
-					for i := 1; i < n; i++ {
-						// should start with video.
-						node = node.Next()
-					}
-				}
-				if node == nil {
-					continue
-				}
 				startTime = node.Value.(*msg).Header.Timestamp
 				isFirst = false
-			} else {
-				node = s.msgs.Back()
-				if node == nil {
-					continue
-				}
 			}
-
 		}
 		s.RUnlock()
 
 		m := node.Value.(*msg)
+		hasSeq = m.seq
 		tagHead, ok := m.getFlvTagHead(startTime, preLength)
 		if ok {
 			preLength = m.Header.PayloadLength
-			if _, err := w.Write(tagHead); err != nil {
+			if _, err = w.Write(tagHead); err != nil {
 				return err
 			}
-			if _, err := w.Write(m.Payload); err != nil {
+			if _, err = w.Write(m.Payload); err != nil {
 				return err
 			}
 		}
+		// safe get node.
 		s.RLock()
 		node = node.Next()
 		s.RUnlock()
 		if node == nil {
-			println("end")
 			atomic.AddInt32(&s.HangWait, 1)
-			s.cond.L.Lock()
-			s.cond.Wait()
-			s.cond.L.Unlock()
-			atomic.AddInt32(&s.HangWait, -1)
+			s.wait()
 		}
 	}
 }
@@ -312,6 +310,7 @@ func (s *Sourcer) Live(w io.Writer) error {
 type msg struct {
 	rtmp.Message
 	refer int
+	seq   uint64
 }
 
 func newMsg(m *rtmp.Message) *msg {

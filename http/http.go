@@ -10,7 +10,7 @@ import (
 
 func InitHTTP() error {
 	http.HandleFunc("/live", func(w http.ResponseWriter, r *http.Request) {
-		glog.Info("get an request.", r.RequestURI, r.Method)
+		glog.Info("http: get an request.", r.RequestURI, r.Method)
 		if r.Method != "GET" {
 			return
 		}
