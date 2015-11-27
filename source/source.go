@@ -339,21 +339,20 @@ func newMsg(m *rtmp.Message) *msg {
 
 func (m *msg) getFlvTagHead(startTime uint64, preLength uint32, buf []byte) bool {
 	uint32ToBytes(preLength, buf[0:4])
-	buf[4] = m.Header.MessageType
-	temp := buf[5]
-	uint32ToBytes(m.Header.PayloadLength, buf[5:9])
-	buf[5] = temp
+	temp := m.Header.MessageType
+	uint32ToBytes(m.Header.PayloadLength, buf[4:8])
+	buf[4] = temp
 
 	indexTime := m.Header.Timestamp - startTime
 	if indexTime < 0 {
 		return false
 	}
-	uint32ToBytes(uint32(indexTime), buf[9:13])
-	high := buf[9]
+	uint32ToBytes(uint32(indexTime), buf[8:12])
+	high := buf[8]
+	buf[8] = buf[9]
 	buf[9] = buf[10]
 	buf[10] = buf[11]
-	buf[11] = buf[12]
-	buf[12] = high
+	buf[11] = high
 
 	return true
 }
