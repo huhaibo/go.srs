@@ -20,6 +20,7 @@ func InitHTTP() error {
 		consumer, err := source.NewConsumer(key)
 		if err != nil {
 			glog.Info("<<<<<<<<<< can not get source >>>>>>>>>>>>>", err)
+			return
 		}
 		defer consumer.Close()
 
@@ -28,7 +29,7 @@ func InitHTTP() error {
 		// TODO: let browser not cache sources.
 		w.Header().Add("Content-Type", "video/x-flv")
 		if err := consumer.Live(w); err != nil {
-			glog.Info("Live get an error", err)
+			glog.Info("Live get an client error:", err)
 		}
 	})
 	http.Handle("/", http.FileServer(http.Dir(".")))

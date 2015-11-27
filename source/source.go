@@ -152,16 +152,21 @@ func (s *Sourcer) addConsumer(c *Consumer) (*list.Element, error) {
 
 // Consumer call it.
 func (s *Sourcer) delConsumer(e *list.Element) {
-	s.Lock()
-	defer s.Unlock()
 	c := s.consumers.Remove(e).(*Consumer)
-	close(c.bufChan)
+	if !c.isClosed {
+		close(c.bufChan)
+		c.isClosed = true
+	}
 }
 
 // Only Sourcer's close method call it.
 func (s *Sourcer) delAllConsumer() {
 	for node := s.consumers.Front(); node != nil; node = node.Next() {
-		close(node.Value.(*Consumer).bufChan)
+		c := node.Value.(*Consumer)
+		if !c.isClosed {
+			close(c.bufChan)
+			c.isClosed = true
+		}
 	}
 }
 

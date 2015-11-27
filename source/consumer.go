@@ -30,6 +30,8 @@ type Consumer struct {
 	sourcer   *Sourcer
 
 	e *list.Element
+
+	isClosed bool
 }
 
 var notSource = errors.New("source not found.")
@@ -60,7 +62,9 @@ func NewConsumer(key string) (*Consumer, error) {
 }
 
 func (c *Consumer) Close() {
+	c.sourcer.Lock()
 	c.sourcer.delConsumer(c.e)
+	c.sourcer.Unlock()
 }
 
 // Range consumer sourcer must call read lock
